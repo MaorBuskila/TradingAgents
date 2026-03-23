@@ -547,7 +547,18 @@ def get_user_selections():
     # Step 5: Research depth
     console.print(
         create_question_box(
-            "Step 5: Research Depth", "Select your research depth level"
+            "Step 3: Analysts Team", "Select your LLM analyst agents for the analysis"
+        )
+    )
+    selected_analysts = select_analysts()
+    console.print(
+        f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
+    )
+
+    # Step 4: Research depth
+    console.print(
+        create_question_box(
+            "Step 4: Research Depth", "Select your research depth level"
         )
     )
     selected_research_depth = select_research_depth()
@@ -559,17 +570,17 @@ def get_user_selections():
         )
     )
     selected_llm_provider, backend_url = select_llm_provider()
-
-    # Step 7: Thinking agents
+    
+    # Step 6: Thinking agents
     console.print(
         create_question_box(
-            "Step 7: Thinking Agents", "Select your thinking agents for analysis"
+            "Step 6: Thinking Agents", "Select your thinking agents for analysis"
         )
     )
     selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
     selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
 
-    # Step 8: Provider-specific thinking configuration
+    # Step 7: Provider-specific thinking configuration
     thinking_level = None
     reasoning_effort = None
     anthropic_effort = None
@@ -578,7 +589,7 @@ def get_user_selections():
     if provider_lower == "google":
         console.print(
             create_question_box(
-                "Step 8: Thinking Mode",
+                "Step 7: Thinking Mode",
                 "Configure Gemini thinking mode"
             )
         )
@@ -586,7 +597,7 @@ def get_user_selections():
     elif provider_lower == "openai":
         console.print(
             create_question_box(
-                "Step 8: Reasoning Effort",
+                "Step 7: Reasoning Effort",
                 "Configure OpenAI reasoning effort level"
             )
         )

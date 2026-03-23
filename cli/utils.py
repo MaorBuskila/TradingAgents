@@ -28,7 +28,7 @@ ANALYST_ORDER = [
 def get_ticker() -> str:
     """Prompt the user to enter a ticker symbol."""
     ticker = questionary.text(
-        f"Enter the exact ticker symbol to analyze ({TICKER_INPUT_EXAMPLES}):",
+        "Enter the ticker symbol to analyze:",
         validate=lambda x: len(x.strip()) > 0 or "Please enter a valid ticker symbol.",
         style=questionary.Style(
             [
@@ -42,11 +42,6 @@ def get_ticker() -> str:
         console.print("\n[red]No ticker symbol provided. Exiting...[/red]")
         exit(1)
 
-    return normalize_ticker_symbol(ticker)
-
-
-def normalize_ticker_symbol(ticker: str) -> str:
-    """Normalize ticker input while preserving exchange suffixes."""
     return ticker.strip().upper()
 
 
@@ -146,7 +141,6 @@ def _fetch_openrouter_models() -> List[Tuple[str, str]]:
         console.print(f"\n[yellow]Could not fetch OpenRouter models: {e}[/yellow]")
         return []
 
-<<<<<<< HEAD
 
 def select_openrouter_model() -> str:
     """Select an OpenRouter model from the newest available, or enter a custom ID."""
@@ -155,8 +149,6 @@ def select_openrouter_model() -> str:
     choices = [questionary.Choice(name, value=mid) for name, mid in models[:5]]
     choices.append(questionary.Choice("Custom model ID", value="custom"))
 
-=======
->>>>>>> 8c8e87c (Added GUI, youtube summery, watchlist)
     choice = questionary.select(
         "Select OpenRouter Model (latest available):",
         choices=choices,
@@ -231,7 +223,6 @@ def select_deep_thinking_agent(provider) -> str:
     """Select deep thinking llm engine using an interactive selection."""
     return _select_model(provider, "deep")
 
-<<<<<<< HEAD
 def select_llm_provider() -> tuple[str, str | None]:
     """Select the LLM provider and its API endpoint."""
     # (display_name, provider_key, base_url)
@@ -253,37 +244,6 @@ def select_llm_provider() -> tuple[str, str | None]:
         choices=[
             questionary.Choice(display, value=(provider_key, url))
             for display, provider_key, url in PROVIDERS
-=======
-    choice = questionary.select(
-        "Select Your [Deep-Thinking LLM Engine]:",
-        choices=[
-            questionary.Choice(display, value=value)
-            for display, value in DEEP_AGENT_OPTIONS[provider.lower()]
-        ],
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
-        style=questionary.Style(
-            [
-                ("selected", "fg:magenta noinherit"),
-                ("highlighted", "fg:magenta noinherit"),
-                ("pointer", "fg:magenta noinherit"),
-            ]
-        ),
-    ).ask()
-
-    if choice is None:
-        console.print("\n[red]No deep thinking llm engine selected. Exiting...[/red]")
-        exit(1)
-
-    return choice
-
-def select_llm_provider() -> tuple[str, str]:
-    """Select the OpenAI api url using interactive selection."""
-    choice = questionary.select(
-        "Select your LLM Provider:",
-        choices=[
-            questionary.Choice(display, value=(display, value))
-            for display, value in LLM_PROVIDERS
->>>>>>> 8c8e87c (Added GUI, youtube summery, watchlist)
         ],
         instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
         style=questionary.Style(
