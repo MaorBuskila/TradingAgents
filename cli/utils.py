@@ -4,17 +4,24 @@ from typing import List, Optional, Tuple, Dict
 from rich.console import Console
 
 from cli.models import AnalystType
-from tradingagents.llm_clients.model_catalog import get_model_options
+from tradingagents.llm_catalog import (
+    DEEP_AGENT_OPTIONS,
+    LLM_PROVIDERS,
+    SHALLOW_AGENT_OPTIONS,
+)
+from tradingagents.analysis_wizard_spec import (
+    ANALYST_OPTIONS,
+    ANTHROPIC_EFFORT_OPTIONS,
+    GOOGLE_THINKING_OPTIONS,
+    OPENAI_REASONING_OPTIONS,
+    RESEARCH_DEPTH_OPTIONS,
+    TICKER_INPUT_EXAMPLES,
+)
 
 console = Console()
 
-TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK"
-
 ANALYST_ORDER = [
-    ("Market Analyst", AnalystType.MARKET),
-    ("Social Media Analyst", AnalystType.SOCIAL),
-    ("News Analyst", AnalystType.NEWS),
-    ("Fundamentals Analyst", AnalystType.FUNDAMENTALS),
+    (label, AnalystType(key)) for label, key in ANALYST_OPTIONS
 ]
 
 
@@ -105,17 +112,10 @@ def select_analysts() -> List[AnalystType]:
 def select_research_depth() -> int:
     """Select research depth using an interactive selection."""
 
-    # Define research depth options with their corresponding values
-    DEPTH_OPTIONS = [
-        ("Shallow - Quick research, few debate and strategy discussion rounds", 1),
-        ("Medium - Middle ground, moderate debate rounds and strategy discussion", 3),
-        ("Deep - Comprehensive research, in depth debate and strategy discussion", 5),
-    ]
-
     choice = questionary.select(
         "Select Your [Research Depth]:",
         choices=[
-            questionary.Choice(display, value=value) for display, value in DEPTH_OPTIONS
+            questionary.Choice(display, value=value) for display, value in RESEARCH_DEPTH_OPTIONS
         ],
         instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
         style=questionary.Style(
@@ -146,6 +146,7 @@ def _fetch_openrouter_models() -> List[Tuple[str, str]]:
         console.print(f"\n[yellow]Could not fetch OpenRouter models: {e}[/yellow]")
         return []
 
+<<<<<<< HEAD
 
 def select_openrouter_model() -> str:
     """Select an OpenRouter model from the newest available, or enter a custom ID."""
@@ -154,6 +155,8 @@ def select_openrouter_model() -> str:
     choices = [questionary.Choice(name, value=mid) for name, mid in models[:5]]
     choices.append(questionary.Choice("Custom model ID", value="custom"))
 
+=======
+>>>>>>> 8c8e87c (Added GUI, youtube summery, watchlist)
     choice = questionary.select(
         "Select OpenRouter Model (latest available):",
         choices=choices,
@@ -228,6 +231,7 @@ def select_deep_thinking_agent(provider) -> str:
     """Select deep thinking llm engine using an interactive selection."""
     return _select_model(provider, "deep")
 
+<<<<<<< HEAD
 def select_llm_provider() -> tuple[str, str | None]:
     """Select the LLM provider and its API endpoint."""
     # (display_name, provider_key, base_url)
@@ -249,6 +253,37 @@ def select_llm_provider() -> tuple[str, str | None]:
         choices=[
             questionary.Choice(display, value=(provider_key, url))
             for display, provider_key, url in PROVIDERS
+=======
+    choice = questionary.select(
+        "Select Your [Deep-Thinking LLM Engine]:",
+        choices=[
+            questionary.Choice(display, value=value)
+            for display, value in DEEP_AGENT_OPTIONS[provider.lower()]
+        ],
+        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        style=questionary.Style(
+            [
+                ("selected", "fg:magenta noinherit"),
+                ("highlighted", "fg:magenta noinherit"),
+                ("pointer", "fg:magenta noinherit"),
+            ]
+        ),
+    ).ask()
+
+    if choice is None:
+        console.print("\n[red]No deep thinking llm engine selected. Exiting...[/red]")
+        exit(1)
+
+    return choice
+
+def select_llm_provider() -> tuple[str, str]:
+    """Select the OpenAI api url using interactive selection."""
+    choice = questionary.select(
+        "Select your LLM Provider:",
+        choices=[
+            questionary.Choice(display, value=(display, value))
+            for display, value in LLM_PROVIDERS
+>>>>>>> 8c8e87c (Added GUI, youtube summery, watchlist)
         ],
         instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
         style=questionary.Style(
@@ -271,9 +306,7 @@ def select_llm_provider() -> tuple[str, str | None]:
 def ask_openai_reasoning_effort() -> str:
     """Ask for OpenAI reasoning effort level."""
     choices = [
-        questionary.Choice("Medium (Default)", "medium"),
-        questionary.Choice("High (More thorough)", "high"),
-        questionary.Choice("Low (Faster)", "low"),
+        questionary.Choice(label, value=value) for label, value in OPENAI_REASONING_OPTIONS
     ]
     return questionary.select(
         "Select Reasoning Effort:",
@@ -294,9 +327,7 @@ def ask_anthropic_effort() -> str | None:
     return questionary.select(
         "Select Effort Level:",
         choices=[
-            questionary.Choice("High (recommended)", "high"),
-            questionary.Choice("Medium (balanced)", "medium"),
-            questionary.Choice("Low (faster, cheaper)", "low"),
+            questionary.Choice(label, value=value) for label, value in ANTHROPIC_EFFORT_OPTIONS
         ],
         style=questionary.Style([
             ("selected", "fg:cyan noinherit"),
@@ -315,8 +346,7 @@ def ask_gemini_thinking_config() -> str | None:
     return questionary.select(
         "Select Thinking Mode:",
         choices=[
-            questionary.Choice("Enable Thinking (recommended)", "high"),
-            questionary.Choice("Minimal/Disable Thinking", "minimal"),
+            questionary.Choice(label, value=value) for label, value in GOOGLE_THINKING_OPTIONS
         ],
         style=questionary.Style([
             ("selected", "fg:green noinherit"),
