@@ -7,9 +7,9 @@ from typing import List, Tuple
 from tradingagents.analysis_wizard_spec import wizard_payload_for_api
 
 # (label, backend_url) — label.lower() must match llm_provider keys below
-LLM_PROVIDERS: List[Tuple[str, str]] = [
+LLM_PROVIDERS: List[Tuple[str, str | None]] = [
     ("OpenAI", "https://api.openai.com/v1"),
-    ("Google", "https://generativelanguage.googleapis.com/v1"),
+    ("Google", None),  # SDK auto-selects v1beta; do not hardcode endpoint
     ("Anthropic", "https://api.anthropic.com/"),
     ("xAI", "https://api.x.ai/v1"),
     ("Openrouter", "https://openrouter.ai/api/v1"),
@@ -97,7 +97,7 @@ def llm_catalog_for_api() -> dict:
             {
                 "id": pid,
                 "label": label,
-                "backend_url": url,
+                "backend_url": url or "",
                 "shallow_models": [{"label": l, "value": v} for l, v in SHALLOW_AGENT_OPTIONS[pid]],
                 "deep_models": [{"label": l, "value": v} for l, v in DEEP_AGENT_OPTIONS[pid]],
             }

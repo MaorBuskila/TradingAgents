@@ -510,3 +510,50 @@ class OosTestResponse(BaseModel):
     rows: List[OosTestDateRow]
     summary: OosTestSummary
     algo_type: str                 # "macd" | "rsi"
+
+
+# ---------------------------------------------------------------------------
+# News Lab models
+# ---------------------------------------------------------------------------
+
+class TrendingStockOut(BaseModel):
+    symbol: str
+    display_name: str
+    price: float
+    change_pct: float
+    volume: int
+    market_cap: Optional[float] = None
+
+
+class EarningsCalendarOut(BaseModel):
+    ticker: str
+    next_earnings_date: Optional[str] = None
+    all_earnings_dates: List[str] = []
+    eps_estimate_avg: Optional[float] = None
+    eps_estimate_low: Optional[float] = None
+    eps_estimate_high: Optional[float] = None
+    revenue_estimate_low: Optional[int] = None
+    revenue_estimate_high: Optional[int] = None
+    ex_dividend_date: Optional[str] = None
+    dividend_date: Optional[str] = None
+
+
+class NewsArticleOut(BaseModel):
+    title: str
+    publisher: str
+    link: str
+    pub_date: Optional[str] = None
+    summary: str = ""
+
+
+class RedditTrendingPost(BaseModel):
+    title: str
+    score: int
+    url: str
+
+
+class RedditTrendingTickerOut(BaseModel):
+    symbol: str
+    mentions: int
+    posts: List[RedditTrendingPost] = []
+

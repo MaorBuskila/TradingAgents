@@ -1,0 +1,360 @@
+"""
+rsi_optimizer_algo.py
+=====================
+Pure algorithmic RSI optimizer — NO LLM involved.
+
+What it does (step by step):
+  1. Load cached OHLCV price data for the symbol (already downloaded by the main framework)
+  2. Calculate RSI for many different period lengths (e.g. 2, 3, 4 ... 28)
+  3. For each period + threshold combination, simulate a simple trading strategy and score it
+  4. Split data into two windows:
+       IS  (In-Sample)  = training window  → find the best parameters here
+       OOS (Out-of-Sample) = test window   → validate the best parameters here on UNSEEN data
+  5. Return the winner + confidence score
+
+Key concept — Walk-Forward Validation:
+  |-------- IS window (180 days) --------|---- OOS window (90 days) ----|
+  Optimize here → pick best params         Test those params here
+  If OOS Sharpe is close to IS Sharpe → the optimization is TRUSTWORTHY
+  If OOS Sharpe collapses → we overfit (found noise, not a real pattern)
+
+Scoring metric — Sharpe Ratio:
+  Sharpe = (average daily strategy return) / (std dev of daily returns) * sqrt(252)
+  Higher = better risk-adjusted return.
+  > 1.0 is good. > 0.5 is acceptable. < 0 means the strategy loses money.
+"""
+
+import numpy as np
+import pandas as pd
+import os
+from typing import Annotated
+import yfinance as yf
+from tradingagents.quant_ml.indicators.stockstats_utils import yf_retry, _clean_dataframe
+from tradingagents.dataflows.config import get_config
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 1 — Load OHLCV data (reuses the same cache as the main framework)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_price_data(symbol: str) -> pd.DataFrame:
+    """
+    Load historical OHLCV data for a symbol.
+    Uses the same cache files as the rest of the framework — no extra downloads.
+
+    Returns a DataFrame with columns: Date, Open, High, Low, Close, Volume
+    """
+    config = get_config()
+    today = pd.Timestamp.today()
+    start = today - pd.DateOffset(years=15)
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = today.strftime("%Y-%m-%d")
+
+    data_file = os.path.join(
+        config["data_cache_dir"],
+        f"{symbol}-YFin-data-{start_str}-{end_str}.csv",
+    )
+
+    if os.path.exists(data_file):
+        data = pd.read_csv(data_file, on_bad_lines="skip")
+    else:
+        # Download and cache if not already present
+        os.makedirs(config["data_cache_dir"], exist_ok=True)
+        data = yf_retry(lambda: yf.download(
+            symbol,
+            start=start_str,
+            end=end_str,
+            multi_level_index=False,
+            progress=False,
+            auto_adjust=True,
+        ))
+        data = data.reset_index()
+        data.to_csv(data_file, index=False)
+
+    data = _clean_dataframe(data)
+    data = data.sort_values("Date").reset_index(drop=True)
+    return data
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 2 — Calculate RSI
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _calc_rsi(closes: pd.Series, period: int) -> pd.Series:
+    """
+    Calculate RSI using Wilder's smoothing method (same as stockstats).
+
+    How RSI works:
+      - Measures the ratio of average gains to average losses over `period` days
+      - RSI = 100 - (100 / (1 + RS))  where RS = avg_gain / avg_loss
+      - Range: 0-100.  Above 70 = overbought.  Below 30 = oversold.
+
+    Args:
+        closes: Series of closing prices
+        period: Number of days to look back (e.g. 14)
+
+    Returns:
+        Series of RSI values
+    """
+    delta = closes.diff()  # price change each day
+
+    # Separate gains (positive changes) and losses (negative changes)
+    gain = delta.clip(lower=0)   # keep only positive changes, zero out losses
+    loss = -delta.clip(upper=0)  # keep only negative changes (flip sign to positive)
+
+    # Wilder's smoothing = exponential moving average with alpha = 1/period
+    # This gives more recent data slightly more weight
+    avg_gain = gain.ewm(alpha=1.0 / period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / period, adjust=False).mean()
+
+    # Avoid division by zero
+    rs = avg_gain / avg_loss.replace(0, 1e-10)
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+
+    return rsi
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 3 — Generate trading signals from RSI
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _generate_positions(rsi: pd.Series, upper: float, lower: float) -> pd.Series:
+    """
+    Convert RSI values into a position series.
+
+    Rules:
+      - RSI drops below `lower` (e.g. 30) → BUY (+1), price is oversold
+      - RSI rises above `upper` (e.g. 70) → SELL (-1), price is overbought
+      - RSI crosses back through 50 → EXIT (0), momentum has normalized
+
+    This is the simplest possible RSI strategy — easy to understand and test.
+
+    Returns:
+        Series of positions: +1 (long), -1 (short), 0 (flat)
+    """
+    positions = []
+    pos = 0  # start flat (no position)
+
+    for val in rsi:
+        if np.isnan(val):
+            positions.append(0)
+            continue
+
+        if val < lower:
+            pos = 1   # oversold → go long (buy)
+        elif val > upper:
+            pos = -1  # overbought → go short (sell)
+        elif pos == 1 and val > 50:
+            pos = 0   # exit long when RSI recovers above 50
+        elif pos == -1 and val < 50:
+            pos = 0   # exit short when RSI drops back below 50
+
+        positions.append(pos)
+
+    return pd.Series(positions, index=rsi.index)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 4 — Score a strategy using Sharpe Ratio
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _calc_sharpe(closes: pd.Series, positions: pd.Series) -> float:
+    """
+    Calculate annualized Sharpe ratio for a strategy.
+
+    How it works:
+      - daily_return = today's close / yesterday's close - 1  (e.g. +0.02 = +2%)
+      - strategy_return = position_yesterday * daily_return
+        (if we were long yesterday and price went up → we made money)
+      - Sharpe = mean(strategy_returns) / std(strategy_returns) * sqrt(252)
+        (252 = trading days per year, used to annualize)
+
+    Args:
+        closes: price series
+        positions: +1/-1/0 position series
+
+    Returns:
+        Sharpe ratio (float). Higher is better.
+    """
+    # Shift positions by 1: we act on yesterday's RSI signal
+    pos_shifted = positions.shift(1).fillna(0)
+
+    # Daily price returns
+    price_returns = closes.pct_change().fillna(0)
+
+    # Strategy daily returns = our position * the market's daily move
+    strat_returns = pos_shifted * price_returns
+
+    std = strat_returns.std()
+    if std < 1e-10:
+        return 0.0  # no trades or flat strategy = 0 Sharpe
+
+    sharpe = strat_returns.mean() / std * np.sqrt(252)
+    return round(float(sharpe), 4)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 5 — Walk-Forward Optimization (the full grid search + OOS validation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_algo_optimizer(
+    symbol: Annotated[str, "ticker symbol, e.g. AAPL"],
+    curr_date: Annotated[str, "current date YYYY-MM-DD"],
+    is_days: Annotated[int, "in-sample window length in trading days"] = 180,
+    oos_days: Annotated[int, "out-of-sample window length in trading days"] = 90,
+) -> dict:
+    """
+    Full Walk-Forward RSI Optimization.
+
+    Grid searched:
+      - RSI period:         2 to 28 (step 1)  → 27 values
+      - Overbought threshold: 60 to 85 (step 5) → 6 values
+      - Oversold threshold:   15 to 40 (step 5) → 6 values
+      Total combinations: 27 × 6 × 6 = 972
+
+    Returns dict with:
+      optimal_period, optimal_upper, optimal_lower,
+      is_sharpe, oos_sharpe, confidence,
+      combos_tested, period_sharpes (for chart),
+      default_is_sharpe, default_oos_sharpe (RSI-14/70/30 baseline)
+    """
+    # Load data
+    data = _load_price_data(symbol)
+
+    # Filter to data up to curr_date (simulate real-time: no future data)
+    curr_dt = pd.to_datetime(curr_date)
+    data = data[data["Date"] <= curr_dt].copy()
+
+    closes = data["Close"].reset_index(drop=True)
+    total_days = len(closes)
+
+    # Need enough data for both windows + RSI warmup (28 days max period)
+    min_required = is_days + oos_days + 30
+    if total_days < min_required:
+        raise ValueError(
+            f"Not enough data: {total_days} rows, need at least {min_required}. "
+            f"Try a smaller is_days or oos_days."
+        )
+
+    # ── Split into IS and OOS windows ──────────────────────────────────────
+    # OOS = the MOST RECENT oos_days trading days (unseen data)
+    # IS  = the oos_days before that (training data)
+    #
+    # Example with 270 total days, is=180, oos=90:
+    #   [0 ... 179]  = IS (days 0-179)
+    #   [180 ... 269] = OOS (days 180-269, i.e. last 90 days)
+
+    oos_start = total_days - oos_days
+    is_start = oos_start - is_days
+    if is_start < 0:
+        is_start = 0
+
+    # We calculate RSI on the FULL series for accuracy (more history = better RSI warmup)
+    # Then we evaluate only on the IS or OOS slice
+
+    # ── Grid Search ────────────────────────────────────────────────────────
+    periods = list(range(2, 29))        # 2, 3, 4 ... 28
+    uppers  = list(range(60, 90, 5))    # 60, 65, 70, 75, 80, 85
+    lowers  = list(range(15, 45, 5))    # 15, 20, 25, 30, 35, 40
+
+    best_is_sharpe = -np.inf
+    best_params = {"period": 14, "upper": 70, "lower": 30}
+    combos_tested = 0
+
+    # Track best Sharpe per period (for the bar chart in UI)
+    # key = period, value = {"is_sharpe": best IS sharpe for this period, "oos_sharpe": its OOS sharpe}
+    period_best: dict[int, dict] = {}
+
+    # Pre-cache RSI for each period (avoid recomputing for each threshold combo)
+    rsi_cache: dict[int, pd.Series] = {}
+    for period in periods:
+        rsi_cache[period] = _calc_rsi(closes, period)
+
+    for period in periods:
+        rsi_full = rsi_cache[period]
+        period_best_sharpe = -np.inf
+        period_best_oos = 0.0
+
+        for upper in uppers:
+            for lower in lowers:
+                if upper <= lower:
+                    continue  # invalid: upper must be above lower
+
+                combos_tested += 1
+
+                # Calculate positions on the FULL series
+                positions_full = _generate_positions(rsi_full, upper, lower)
+
+                # Evaluate ONLY on IS slice
+                is_closes    = closes.iloc[is_start:oos_start]
+                is_positions = positions_full.iloc[is_start:oos_start]
+                is_sharpe    = _calc_sharpe(is_closes, is_positions)
+
+                # Track best for this period
+                if is_sharpe > period_best_sharpe:
+                    period_best_sharpe = is_sharpe
+                    # Calculate OOS sharpe for this combo too
+                    oos_closes    = closes.iloc[oos_start:]
+                    oos_positions = positions_full.iloc[oos_start:]
+                    period_best_oos = _calc_sharpe(oos_closes, oos_positions)
+
+                # Track global best
+                if is_sharpe > best_is_sharpe:
+                    best_is_sharpe = is_sharpe
+                    best_params = {"period": period, "upper": upper, "lower": lower}
+
+        period_best[period] = {
+            "period": period,
+            "is_sharpe": round(period_best_sharpe, 4),
+            "oos_sharpe": round(period_best_oos, 4),
+        }
+
+    # ── Validate best params on OOS (unseen data) ──────────────────────────
+    best_rsi  = rsi_cache[best_params["period"]]
+    best_pos  = _generate_positions(best_rsi, best_params["upper"], best_params["lower"])
+
+    oos_closes    = closes.iloc[oos_start:]
+    oos_positions = best_pos.iloc[oos_start:]
+    best_oos_sharpe = _calc_sharpe(oos_closes, oos_positions)
+
+    # ── Baseline: RSI(14) with 70/30 (industry default) ───────────────────
+    default_rsi = rsi_cache.get(14, _calc_rsi(closes, 14))
+    default_pos = _generate_positions(default_rsi, 70.0, 30.0)
+    default_is_sharpe  = _calc_sharpe(closes.iloc[is_start:oos_start], default_pos.iloc[is_start:oos_start])
+    default_oos_sharpe = _calc_sharpe(closes.iloc[oos_start:], default_pos.iloc[oos_start:])
+
+    # ── Confidence Score ───────────────────────────────────────────────────
+    # How much does OOS performance hold up vs IS performance?
+    # ratio close to 1.0 = great. ratio < 0.2 = likely overfit.
+    if best_is_sharpe > 0 and best_oos_sharpe > 0:
+        ratio = best_oos_sharpe / best_is_sharpe
+        if best_oos_sharpe >= 0.5 and ratio >= 0.4:
+            confidence = "HIGH"
+        elif best_oos_sharpe >= 0.2 and ratio >= 0.2:
+            confidence = "MEDIUM"
+        else:
+            confidence = "LOW"
+    elif best_oos_sharpe > 0.3:
+        confidence = "MEDIUM"
+    else:
+        confidence = "LOW"
+
+    return {
+        # Best parameters found
+        "optimal_period": best_params["period"],
+        "optimal_upper":  best_params["upper"],
+        "optimal_lower":  best_params["lower"],
+        # Performance
+        "is_sharpe":   round(best_is_sharpe, 4),
+        "oos_sharpe":  round(best_oos_sharpe, 4),
+        "confidence":  confidence,
+        # Meta
+        "combos_tested":      combos_tested,
+        "is_days":            is_days,
+        "oos_days":           oos_days,
+        # Baseline comparison
+        "default_is_sharpe":  round(default_is_sharpe, 4),
+        "default_oos_sharpe": round(default_oos_sharpe, 4),
+        # Chart data: one entry per period showing best Sharpe for that period
+        "period_sharpes": sorted(period_best.values(), key=lambda x: x["period"]),
+    }

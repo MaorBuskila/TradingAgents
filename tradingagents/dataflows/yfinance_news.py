@@ -48,6 +48,44 @@ def _extract_article_data(article: dict) -> dict:
         }
 
 
+def get_news_yfinance_structured(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+) -> list[dict]:
+    """
+    Same as get_news_yfinance but returns a list of article dicts instead of a
+    formatted string. Each dict has: title, summary, publisher, link, pub_date.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        news = yf_retry(lambda: stock.get_news(count=20))
+        if not news:
+            return []
+
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        articles = []
+
+        for article in news:
+            data = _extract_article_data(article)
+            if data["pub_date"]:
+                pub_naive = data["pub_date"].replace(tzinfo=None)
+                if not (start_dt <= pub_naive <= end_dt + relativedelta(days=1)):
+                    continue
+            articles.append({
+                "title": data["title"],
+                "summary": data.get("summary", ""),
+                "publisher": data["publisher"],
+                "link": data["link"],
+                "pub_date": data["pub_date"].strftime("%Y-%m-%d") if data.get("pub_date") else None,
+            })
+
+        return articles
+    except Exception:
+        return []
+
+
 def get_news_yfinance(
     ticker: str,
     start_date: str,

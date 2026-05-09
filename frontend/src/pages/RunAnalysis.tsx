@@ -169,7 +169,7 @@ type LlmCatalogPayload = {
 type MsgToolRow = { id: number; time: string; kind: string; text: string }
 
 const RUN_ANALYSIS_STORAGE_KEY = 'tradingagents_run_analysis_v2'
-const MAX_STORED_EVENTS = 200
+const MAX_STORED_EVENTS = 1000
 
 type FormDataState = {
   ticker: string
@@ -618,7 +618,7 @@ export default function RunAnalysis() {
               id,
               time: clockStr(),
               kind: String(data.msg_type ?? 'Message'),
-              text: truncate(raw, 220),
+              text: truncate(raw, 2000),
             },
             ...prev,
           ].slice(0, 80),
@@ -628,7 +628,7 @@ export default function RunAnalysis() {
         const id = ++msgIdRef.current
         const text = `${data.tool_name}: ${formatToolArgs(data.args)}`
         setMsgToolRows((prev) =>
-          [{ id, time: clockStr(), kind: 'Tool', text: truncate(text, 220) }, ...prev].slice(
+          [{ id, time: clockStr(), kind: 'Tool', text: truncate(text, 2000) }, ...prev].slice(
             0,
             80,
           ),
@@ -1253,8 +1253,7 @@ export default function RunAnalysis() {
                   <div key={i} className="progress-line">
                     {e.type === 'message' && (
                       <span className="progress-msg">
-                        [{e.msg_type}] {String(e.content ?? '').slice(0, 500)}
-                        {String(e.content ?? '').length > 500 ? '…' : ''}
+                        [{e.msg_type}] {String(e.content ?? '')}
                       </span>
                     )}
                     {e.type === 'tool_call' && (

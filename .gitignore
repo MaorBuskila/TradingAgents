@@ -242,7 +242,11 @@ __marimo__/
 
 # Cache
 **/data_cache/
-tradingagents/chroma_db/
+chroma_db/
+
+# ML model artifacts (optimizer outputs)
+*.pkl
+*.joblib
 
 # Frontend build artifacts
 frontend/dist/

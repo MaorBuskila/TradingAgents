@@ -23,6 +23,14 @@ from .alpha_vantage import (
     get_global_news as get_alpha_vantage_global_news,
 )
 from .alpha_vantage_common import AlphaVantageRateLimitError
+from .yfinance_extras import (
+    get_earnings_calendar,
+    get_earnings_calendar_multi,
+    get_trending_stocks,
+    get_influencer_mentions,
+)
+from .reddit_sentiment import get_reddit_sentiment, get_reddit_trending_tickers
+from .fear_greed import get_fear_greed
 
 # Configuration and routing logic
 from tradingagents.dataflows.config import get_config
@@ -51,11 +59,18 @@ TOOLS_CATEGORIES = {
         ]
     },
     "news_data": {
-        "description": "News and insider data",
+        "description": "News, social, and insider data",
         "tools": [
             "get_news",
             "get_global_news",
             "get_insider_transactions",
+            "get_earnings_calendar",
+            "get_earnings_calendar_multi",
+            "get_trending_stocks",
+            "get_influencer_mentions",
+            "get_reddit_sentiment",
+            "get_reddit_trending_tickers",
+            "get_fear_greed",
         ]
     }
 }
@@ -106,6 +121,29 @@ VENDOR_METHODS = {
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
+    },
+    # news_data — yfinance-only extras
+    "get_earnings_calendar": {
+        "yfinance": get_earnings_calendar,
+    },
+    "get_earnings_calendar_multi": {
+        "yfinance": get_earnings_calendar_multi,
+    },
+    "get_trending_stocks": {
+        "yfinance": get_trending_stocks,
+    },
+    "get_influencer_mentions": {
+        "yfinance": get_influencer_mentions,
+    },
+    # news_data — direct data sources (no vendor abstraction needed)
+    "get_reddit_sentiment": {
+        "yfinance": get_reddit_sentiment,
+    },
+    "get_reddit_trending_tickers": {
+        "yfinance": get_reddit_trending_tickers,
+    },
+    "get_fear_greed": {
+        "yfinance": get_fear_greed,
     },
 }
 

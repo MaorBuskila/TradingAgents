@@ -41,7 +41,6 @@ def infer_llm_defaults_from_env() -> dict[str, Any]:
     elif os.getenv("GOOGLE_API_KEY", "").strip() or os.getenv("GEMINI_API_KEY", "").strip():
         base = {
             "llm_provider": "google",
-            "backend_url": "https://generativelanguage.googleapis.com/v1",
             "shallow_thinker": "gemini-2.5-flash",
             "deep_thinker": "gemini-2.5-pro",
         }

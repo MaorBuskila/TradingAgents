@@ -28,7 +28,11 @@ class GoogleClient(BaseLLMClient):
         self.warn_if_unknown_model()
         llm_kwargs = {"model": self.model}
 
-        if self.base_url:
+        # The google-genai SDK auto-selects the correct endpoint (v1beta).
+        # Passing a custom base_url that points to generativelanguage.googleapis.com
+        # overrides the SDK default and breaks Gemini 2.5+ models (they live on v1beta,
+        # not v1). Only forward base_url for genuine proxy/custom-endpoint setups.
+        if self.base_url and "generativelanguage.googleapis.com" not in self.base_url:
             llm_kwargs["base_url"] = self.base_url
 
         for key in ("timeout", "max_retries", "callbacks", "http_client", "http_async_client"):

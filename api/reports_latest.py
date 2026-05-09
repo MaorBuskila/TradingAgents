@@ -21,8 +21,8 @@ def _parse_report_header_ticker(first_line: str) -> str | None:
 
 
 def _sort_key_form_dir(name: str) -> str:
-    """FORM_YYYYMMDD_HHMMSS -> comparable string; unknown shapes sort low."""
-    m = re.match(r"^FORM_(\d{8})_(\d{6})$", name)
+    """<TICKER>_YYYYMMDD_HHMMSS -> comparable datetime string; unknown shapes sort low."""
+    m = re.match(r"^[A-Z0-9.^=\-]+_(\d{8})_(\d{6})$", name)
     if m:
         return f"{m.group(1)}{m.group(2)}"
     return "00000000000000"

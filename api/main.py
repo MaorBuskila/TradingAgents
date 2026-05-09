@@ -76,6 +76,7 @@ from tradingagents.llm_catalog import llm_catalog_for_api
 from tradingagents.analysis_defaults import infer_llm_defaults_from_env
 from .reports_latest import get_latest_decision_for_ticker
 from .portfolio import router as portfolio_router
+from .news import router as news_router
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -136,6 +137,7 @@ app.add_middleware(
 )
 
 app.include_router(portfolio_router, prefix="/api")
+app.include_router(news_router, prefix="/api")
 
 # In-memory job store
 jobs = {}
@@ -267,7 +269,8 @@ async def start_analysis(req: AnalysisRequest):
             report_save_error = None
             try:
                 ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                report_id = f"FORM_{ts}"
+                ticker_prefix = normalized_selections["ticker"].upper().strip()
+                report_id = f"{ticker_prefix}_{ts}"
                 save_path = Path("reports") / report_id
                 save_report_to_disk(final_state, normalized_selections["ticker"], save_path)
                 report_saved = True
