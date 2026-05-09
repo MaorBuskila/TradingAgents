@@ -52,6 +52,15 @@ class Propagator:
             "fundamentals_report": "",
             "sentiment_report": "",
             "news_report": "",
+            # RSI optimizer defaults — overwritten by the RSI Optimizer node
+            "rsi_optimal_period": 14,
+            "rsi_optimal_upper": 70.0,
+            "rsi_optimal_lower": 30.0,
+            "rsi_oos_sharpe": 0.0,
+            "rsi_is_sharpe": 0.0,
+            "rsi_confidence": "UNKNOWN",
+            "rsi_regime": "unknown",
+            "rsi_from_cache": False,
         }
 
     def get_graph_args(self, callbacks: Optional[List] = None) -> Dict[str, Any]:

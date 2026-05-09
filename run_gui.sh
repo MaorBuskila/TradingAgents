@@ -8,7 +8,9 @@ echo "========================================"
 echo "   Starting TradingAgents GUI Stack"
 echo "========================================"
 
-if [[ -x "$ROOT/.venv/bin/python" ]]; then
+if [[ -f "$ROOT/.venv/bin/activate" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT/.venv/bin/activate"
   PY="$ROOT/.venv/bin/python"
 elif command -v python3 >/dev/null 2>&1; then
   PY="$(command -v python3)"
@@ -36,6 +38,16 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
+# Fail fast: catch TypeScript/build errors before starting services
+echo "Checking frontend for build errors..."
+if ! (cd "$ROOT/frontend" && npm run build -- --mode development 2>&1); then
+  echo ""
+  echo "ERROR: Frontend build failed. Fix the errors above before running."
+  exit 1
+fi
+echo "Frontend OK."
+echo ""
+
 echo "Starting FastAPI backend on http://127.0.0.1:8000 ..."
 "$PY" -m uvicorn api.main:app --host 127.0.0.1 --port 8000 &
 BACKEND_PID=$!
@@ -55,7 +67,7 @@ if ! curl -sf "http://127.0.0.1:8000/docs" >/dev/null 2>&1; then
 fi
 
 echo "Starting Vite frontend (proxies /api -> backend) ..."
-(cd "$ROOT/frontend" && npm run dev) &
+(cd "$ROOT/frontend" && npm run dev 2>&1) &
 FRONTEND_PID=$!
 
 echo "========================================"

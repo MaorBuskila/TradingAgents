@@ -49,6 +49,16 @@ class AgentState(MessagesState):
 
     sender: Annotated[str, "Agent that sent this message"]
 
+    # --- Adaptive RSI params (populated by RSI Optimizer node before analysts run) ---
+    rsi_optimal_period: Annotated[int, "Walk-forward optimized RSI lookback period"]
+    rsi_optimal_upper: Annotated[float, "Optimized overbought threshold for RSI"]
+    rsi_optimal_lower: Annotated[float, "Optimized oversold threshold for RSI"]
+    rsi_oos_sharpe: Annotated[float, "Out-of-sample Sharpe ratio of optimized params"]
+    rsi_is_sharpe: Annotated[float, "In-sample Sharpe ratio of optimized params"]
+    rsi_confidence: Annotated[str, "Optimization confidence: HIGH / MEDIUM / LOW"]
+    rsi_regime: Annotated[str, "Market regime detected during optimization"]
+    rsi_from_cache: Annotated[bool, "True if RSI params were loaded from DB cache"]
+
     # research step
     market_report: Annotated[str, "Report from the Market Analyst"]
     sentiment_report: Annotated[str, "Report from the Social Media Analyst"]

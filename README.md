@@ -70,7 +70,7 @@ Our framework decomposes complex trading tasks into specialized roles. This ensu
 - Fundamentals Analyst: Evaluates company financials and performance metrics, identifying intrinsic values and potential red flags.
 - Sentiment Analyst: Analyzes social media and public sentiment using sentiment scoring algorithms to gauge short-term market mood.
 - News Analyst: Monitors global news and macroeconomic indicators, interpreting the impact of events on market conditions.
-- Technical Analyst: Utilizes technical indicators (like MACD and RSI) to detect trading patterns and forecast price movements.
+- Technical Analyst: Utilizes technical indicators (like MACD and RSI) to detect trading patterns and forecast price movements. Includes a [MACD Decision Tree optimizer](docs/MACD_DT_OPTIMIZATION.md) — a two-model ensemble (sliding WFO + fixed crash-aware) that uses Decision Trees to determine when MACD signals are high-confidence, with ATR-based volatility gating.
 
 <p align="center">
   <img src="assets/analyst.png" width="100%" style="display: inline-block; margin: 0 2%;">

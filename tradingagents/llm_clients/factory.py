@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from .base_client import BaseLLMClient
 
@@ -6,6 +6,29 @@ from .base_client import BaseLLMClient
 _OPENAI_COMPATIBLE = (
     "openai", "xai", "deepseek", "qwen", "glm", "ollama", "openrouter",
 )
+
+
+def provider_kwargs_for_provider(config: dict[str, Any], provider: str) -> dict[str, Any]:
+    """Thinking/reasoning kwargs for create_llm_client, aligned with TradingAgentsGraph."""
+    kwargs: dict[str, Any] = {}
+    p = (provider or "").lower()
+    if p == "google":
+        thinking_level = config.get("google_thinking_level")
+        if thinking_level:
+            kwargs["thinking_level"] = thinking_level
+    elif p == "openai":
+        reasoning_effort = config.get("openai_reasoning_effort")
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
+    elif p == "anthropic":
+        effort = config.get("anthropic_effort")
+        if effort:
+            kwargs["effort"] = effort
+    elif p == "ollama":
+        ollama_thinking = config.get("ollama_thinking")
+        if ollama_thinking is not None:
+            kwargs["ollama_thinking"] = ollama_thinking
+    return kwargs
 
 
 def create_llm_client(

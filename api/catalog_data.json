@@ -12,74 +12,423 @@
     "consumer": "Consumer",
     "broad-market": "Broad Market & Core",
     "dividends": "Dividends & Income",
-    "international": "International & EM"
+    "international": "International & EM",
+    "real-estate": "Real Estate & Data Centers"
   },
   "symbols": [
-    {"ticker": "ICLN", "name": "iShares Global Clean Energy ETF", "category": "green-energy", "asset_type": "etf"},
-    {"ticker": "TAN", "name": "Invesco Solar ETF", "category": "green-energy", "asset_type": "etf"},
-    {"ticker": "QCLN", "name": "First Trust NASDAQ Clean Edge Green Energy", "category": "green-energy", "asset_type": "etf"},
-    {"ticker": "PBW", "name": "Invesco WilderHill Clean Energy ETF", "category": "green-energy", "asset_type": "etf"},
-    {"ticker": "FAN", "name": "First Trust Global Wind Energy ETF", "category": "green-energy", "asset_type": "etf"},
-    {"ticker": "ACES", "name": "ALPS Clean Energy ETF", "category": "green-energy", "asset_type": "etf"},
-    {"ticker": "SMOG", "name": "VanEck Low Carbon Energy ETF", "category": "green-energy", "asset_type": "etf"},
-    {"ticker": "ENPH", "name": "Enphase Energy Inc.", "category": "green-energy", "asset_type": "stock"},
-    {"ticker": "NEE", "name": "NextEra Energy Inc.", "category": "green-energy", "asset_type": "stock"},
-    {"ticker": "FSLR", "name": "First Solar Inc.", "category": "green-energy", "asset_type": "stock"},
-    {"ticker": "QQQ", "name": "Invesco QQQ Trust", "category": "technology", "asset_type": "etf"},
-    {"ticker": "XLK", "name": "Technology Select Sector SPDR", "category": "technology", "asset_type": "etf"},
-    {"ticker": "VGT", "name": "Vanguard Information Technology ETF", "category": "technology", "asset_type": "etf"},
-    {"ticker": "SMH", "name": "VanEck Semiconductor ETF", "category": "technology", "asset_type": "etf"},
-    {"ticker": "SOXX", "name": "iShares Semiconductor ETF", "category": "technology", "asset_type": "etf"},
-    {"ticker": "FORM", "name": "FormFactor Inc. (semiconductor test equipment)", "category": "technology", "asset_type": "stock"},
-    {"ticker": "XLV", "name": "Health Care Select Sector SPDR", "category": "healthcare", "asset_type": "etf"},
-    {"ticker": "VHT", "name": "Vanguard Health Care ETF", "category": "healthcare", "asset_type": "etf"},
-    {"ticker": "IYH", "name": "iShares U.S. Healthcare ETF", "category": "healthcare", "asset_type": "etf"},
-    {"ticker": "XLF", "name": "Financial Select Sector SPDR", "category": "financials", "asset_type": "etf"},
-    {"ticker": "VFH", "name": "Vanguard Financials ETF", "category": "financials", "asset_type": "etf"},
-    {"ticker": "KRE", "name": "SPDR S&P Regional Banking ETF", "category": "financials", "asset_type": "etf"},
-    {"ticker": "XLY", "name": "Consumer Discretionary Select Sector SPDR", "category": "consumer", "asset_type": "etf"},
-    {"ticker": "XLP", "name": "Consumer Staples Select Sector SPDR", "category": "consumer", "asset_type": "etf"},
-    {"ticker": "VCR", "name": "Vanguard Consumer Discretionary ETF", "category": "consumer", "asset_type": "etf"},
-    {"ticker": "SPY", "name": "SPDR S&P 500 ETF Trust", "category": "broad-market", "asset_type": "etf"},
-    {"ticker": "VOO", "name": "Vanguard S&P 500 ETF", "category": "broad-market", "asset_type": "etf"},
-    {"ticker": "IVV", "name": "iShares Core S&P 500 ETF", "category": "broad-market", "asset_type": "etf"},
-    {"ticker": "VTI", "name": "Vanguard Total Stock Market ETF", "category": "broad-market", "asset_type": "etf"},
-    {"ticker": "SCHD", "name": "Schwab U.S. Dividend Equity ETF", "category": "dividends", "asset_type": "etf"},
-    {"ticker": "VYM", "name": "Vanguard High Dividend Yield ETF", "category": "dividends", "asset_type": "etf"},
-    {"ticker": "DGRO", "name": "iShares Core Dividend Growth ETF", "category": "dividends", "asset_type": "etf"},
-    {"ticker": "VEA", "name": "Vanguard FTSE Developed Markets ETF", "category": "international", "asset_type": "etf"},
-    {"ticker": "VWO", "name": "Vanguard FTSE Emerging Markets ETF", "category": "international", "asset_type": "etf"},
-    {"ticker": "IEFA", "name": "iShares Core MSCI EAFE ETF", "category": "international", "asset_type": "etf"},
-    {"ticker": "EEM", "name": "iShares MSCI Emerging Markets ETF", "category": "international", "asset_type": "etf"},
-
-    {"ticker": "NLR", "name": "VanEck Uranium+Nuclear Energy ETF", "category": "nuclear-energy", "asset_type": "etf"},
-    {"ticker": "URA", "name": "Global X Uranium ETF", "category": "nuclear-energy", "asset_type": "etf"},
-    {"ticker": "URNM", "name": "Sprott Uranium Miners ETF", "category": "nuclear-energy", "asset_type": "etf"},
-    {"ticker": "CCJ", "name": "Cameco Corp. (uranium fuel)", "category": "nuclear-energy", "asset_type": "stock"},
-    {"ticker": "LEU", "name": "Centrus Energy Corp. (uranium enrichment)", "category": "nuclear-energy", "asset_type": "stock"},
-    {"ticker": "SMR", "name": "NuScale Power Corp. (SMR developer)", "category": "nuclear-energy", "asset_type": "stock"},
-    {"ticker": "OKLO", "name": "Oklo Inc. (advanced fission)", "category": "nuclear-energy", "asset_type": "stock"},
-    {"ticker": "BWXT", "name": "BWX Technologies Inc. (nuclear components)", "category": "nuclear-energy", "asset_type": "stock"},
-    {"ticker": "VST", "name": "Vistra Corp. (utilities; nuclear generation exposure)", "category": "nuclear-energy", "asset_type": "stock"},
-
-    {"ticker": "VRT", "name": "Vertiv Holdings (datacenter power & thermal mgmt)", "category": "cooling-hvac-datacenter", "asset_type": "stock"},
-    {"ticker": "CARR", "name": "Carrier Global Corp. (HVAC & refrigeration)", "category": "cooling-hvac-datacenter", "asset_type": "stock"},
-    {"ticker": "JCI", "name": "Johnson Controls International (building HVAC)", "category": "cooling-hvac-datacenter", "asset_type": "stock"},
-    {"ticker": "LII", "name": "Lennox International Inc. (HVAC equipment)", "category": "cooling-hvac-datacenter", "asset_type": "stock"},
-    {"ticker": "TT", "name": "Trane Technologies plc (commercial HVAC)", "category": "cooling-hvac-datacenter", "asset_type": "stock"},
-    {"ticker": "EMR", "name": "Emerson Electric Co. (climate tech / automation)", "category": "cooling-hvac-datacenter", "asset_type": "stock"},
-    {"ticker": "WTS", "name": "Watts Water Technologies (flow & thermal systems)", "category": "cooling-hvac-datacenter", "asset_type": "stock"},
-
-    {"ticker": "AWK", "name": "American Water Works Co.", "category": "water-utilities", "asset_type": "stock"},
-    {"ticker": "WTRG", "name": "Essential Utilities Inc.", "category": "water-utilities", "asset_type": "stock"},
-    {"ticker": "CWT", "name": "California Water Service Group", "category": "water-utilities", "asset_type": "stock"},
-
-    {"ticker": "CIBR", "name": "First Trust NASDAQ Cybersecurity ETF", "category": "cybersecurity", "asset_type": "etf"},
-    {"ticker": "HACK", "name": "ETFMG Prime Cyber Security ETF", "category": "cybersecurity", "asset_type": "etf"},
-    {"ticker": "PANW", "name": "Palo Alto Networks Inc.", "category": "cybersecurity", "asset_type": "stock"},
-
-    {"ticker": "PAVE", "name": "Global X U.S. Infrastructure Development ETF", "category": "infrastructure", "asset_type": "etf"},
-    {"ticker": "IGF", "name": "iShares Global Infrastructure ETF", "category": "infrastructure", "asset_type": "etf"},
-    {"ticker": "IFRA", "name": "iShares U.S. Infrastructure ETF", "category": "infrastructure", "asset_type": "etf"}
+    {
+      "ticker": "ICLN",
+      "name": "iShares Global Clean Energy ETF",
+      "category": "green-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "TAN",
+      "name": "Invesco Solar ETF",
+      "category": "green-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "QCLN",
+      "name": "First Trust NASDAQ Clean Edge Green Energy",
+      "category": "green-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "PBW",
+      "name": "Invesco WilderHill Clean Energy ETF",
+      "category": "green-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "FAN",
+      "name": "First Trust Global Wind Energy ETF",
+      "category": "green-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "ACES",
+      "name": "ALPS Clean Energy ETF",
+      "category": "green-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "SMOG",
+      "name": "VanEck Low Carbon Energy ETF",
+      "category": "green-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "ENPH",
+      "name": "Enphase Energy Inc.",
+      "category": "green-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "NEE",
+      "name": "NextEra Energy Inc.",
+      "category": "green-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "FSLR",
+      "name": "First Solar Inc.",
+      "category": "green-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "QQQ",
+      "name": "Invesco QQQ Trust",
+      "category": "technology",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "XLK",
+      "name": "Technology Select Sector SPDR",
+      "category": "technology",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VGT",
+      "name": "Vanguard Information Technology ETF",
+      "category": "technology",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "SMH",
+      "name": "VanEck Semiconductor ETF",
+      "category": "technology",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "SOXX",
+      "name": "iShares Semiconductor ETF",
+      "category": "technology",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "FORM",
+      "name": "FormFactor Inc. (semiconductor test equipment)",
+      "category": "technology",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "XLV",
+      "name": "Health Care Select Sector SPDR",
+      "category": "healthcare",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VHT",
+      "name": "Vanguard Health Care ETF",
+      "category": "healthcare",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "IYH",
+      "name": "iShares U.S. Healthcare ETF",
+      "category": "healthcare",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "XLF",
+      "name": "Financial Select Sector SPDR",
+      "category": "financials",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VFH",
+      "name": "Vanguard Financials ETF",
+      "category": "financials",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "KRE",
+      "name": "SPDR S&P Regional Banking ETF",
+      "category": "financials",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "XLY",
+      "name": "Consumer Discretionary Select Sector SPDR",
+      "category": "consumer",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "XLP",
+      "name": "Consumer Staples Select Sector SPDR",
+      "category": "consumer",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VCR",
+      "name": "Vanguard Consumer Discretionary ETF",
+      "category": "consumer",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "SPY",
+      "name": "SPDR S&P 500 ETF Trust",
+      "category": "broad-market",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VOO",
+      "name": "Vanguard S&P 500 ETF",
+      "category": "broad-market",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "IVV",
+      "name": "iShares Core S&P 500 ETF",
+      "category": "broad-market",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VTI",
+      "name": "Vanguard Total Stock Market ETF",
+      "category": "broad-market",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "SCHD",
+      "name": "Schwab U.S. Dividend Equity ETF",
+      "category": "dividends",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VYM",
+      "name": "Vanguard High Dividend Yield ETF",
+      "category": "dividends",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "DGRO",
+      "name": "iShares Core Dividend Growth ETF",
+      "category": "dividends",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VEA",
+      "name": "Vanguard FTSE Developed Markets ETF",
+      "category": "international",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VWO",
+      "name": "Vanguard FTSE Emerging Markets ETF",
+      "category": "international",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "IEFA",
+      "name": "iShares Core MSCI EAFE ETF",
+      "category": "international",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "EEM",
+      "name": "iShares MSCI Emerging Markets ETF",
+      "category": "international",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "NLR",
+      "name": "VanEck Uranium+Nuclear Energy ETF",
+      "category": "nuclear-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "URA",
+      "name": "Global X Uranium ETF",
+      "category": "nuclear-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "URNM",
+      "name": "Sprott Uranium Miners ETF",
+      "category": "nuclear-energy",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "CCJ",
+      "name": "Cameco Corp. (uranium fuel)",
+      "category": "nuclear-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "LEU",
+      "name": "Centrus Energy Corp. (uranium enrichment)",
+      "category": "nuclear-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "SMR",
+      "name": "NuScale Power Corp. (SMR developer)",
+      "category": "nuclear-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "OKLO",
+      "name": "Oklo Inc. (advanced fission)",
+      "category": "nuclear-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "BWXT",
+      "name": "BWX Technologies Inc. (nuclear components)",
+      "category": "nuclear-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "VST",
+      "name": "Vistra Corp. (utilities; nuclear generation exposure)",
+      "category": "nuclear-energy",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "VRT",
+      "name": "Vertiv Holdings (datacenter power & thermal mgmt)",
+      "category": "cooling-hvac-datacenter",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "CARR",
+      "name": "Carrier Global Corp. (HVAC & refrigeration)",
+      "category": "cooling-hvac-datacenter",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "JCI",
+      "name": "Johnson Controls International (building HVAC)",
+      "category": "cooling-hvac-datacenter",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "LII",
+      "name": "Lennox International Inc. (HVAC equipment)",
+      "category": "cooling-hvac-datacenter",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "TT",
+      "name": "Trane Technologies plc (commercial HVAC)",
+      "category": "cooling-hvac-datacenter",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "EMR",
+      "name": "Emerson Electric Co. (climate tech / automation)",
+      "category": "cooling-hvac-datacenter",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "WTS",
+      "name": "Watts Water Technologies (flow & thermal systems)",
+      "category": "cooling-hvac-datacenter",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "AWK",
+      "name": "American Water Works Co.",
+      "category": "water-utilities",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "WTRG",
+      "name": "Essential Utilities Inc.",
+      "category": "water-utilities",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "CWT",
+      "name": "California Water Service Group",
+      "category": "water-utilities",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "CIBR",
+      "name": "First Trust NASDAQ Cybersecurity ETF",
+      "category": "cybersecurity",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "HACK",
+      "name": "ETFMG Prime Cyber Security ETF",
+      "category": "cybersecurity",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "PANW",
+      "name": "Palo Alto Networks Inc.",
+      "category": "cybersecurity",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "PAVE",
+      "name": "Global X U.S. Infrastructure Development ETF",
+      "category": "infrastructure",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "IGF",
+      "name": "iShares Global Infrastructure ETF",
+      "category": "infrastructure",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "IFRA",
+      "name": "iShares U.S. Infrastructure ETF",
+      "category": "infrastructure",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "MSFT",
+      "name": "Microsoft Corporation",
+      "category": "tech",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "IYW",
+      "name": "iShares US Technology ETF",
+      "category": "tech",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "VXUS",
+      "name": "Vanguard Total International Stock ETF",
+      "category": "broad-market",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "ACWI",
+      "name": "iShares MSCI ACWI ETF",
+      "category": "broad-market",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "SRRE",
+      "name": "Pacer Data & Infrastructure Real Estate ETF",
+      "category": "real-estate",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "EQIX",
+      "name": "Equinix Inc",
+      "category": "real-estate",
+      "asset_type": "stock"
+    },
+    {
+      "ticker": "ARKG",
+      "name": "ARK Genomic Revolution ETF",
+      "category": "health",
+      "asset_type": "etf"
+    },
+    {
+      "ticker": "ISRG",
+      "name": "Intuitive Surgical Inc",
+      "category": "health",
+      "asset_type": "stock"
+    }
   ]
 }

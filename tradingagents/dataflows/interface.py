@@ -1,7 +1,7 @@
 from typing import Annotated
 
 # Import from vendor-specific modules
-from .y_finance import (
+from tradingagents.dataflows.y_finance import (
     get_YFin_data_online,
     get_stock_stats_indicators_window,
     get_fundamentals as get_yfinance_fundamentals,
@@ -25,7 +25,7 @@ from .alpha_vantage import (
 from .alpha_vantage_common import AlphaVantageRateLimitError
 
 # Configuration and routing logic
-from .config import get_config
+from tradingagents.dataflows.config import get_config
 
 # Tools organized by category
 TOOLS_CATEGORIES = {

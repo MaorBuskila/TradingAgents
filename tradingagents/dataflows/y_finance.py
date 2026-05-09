@@ -47,6 +47,19 @@ def get_YFin_data_online(
 
     return header + csv_string
 
+def _translate_indicator(indicator: str) -> str:
+    """
+    Translate framework indicator names to stockstats column names.
+    e.g. rsi_6 -> 6_rsi, rsi_14 -> 14_rsi, rsi_21 -> 21_rsi
+    All other indicator names pass through unchanged.
+    """
+    import re
+    m = re.fullmatch(r"rsi_(\d+)", indicator)
+    if m:
+        return f"{m.group(1)}_rsi"
+    return indicator
+
+
 def get_stock_stats_indicators_window(
     symbol: Annotated[str, "ticker symbol of the company"],
     indicator: Annotated[str, "technical indicator to get the analysis and report of"],
@@ -91,9 +104,27 @@ def get_stock_stats_indicators_window(
         ),
         # Momentum Indicators
         "rsi": (
-            "RSI: Measures momentum to flag overbought/oversold conditions. "
+            "RSI (14-period default): Measures momentum to flag overbought/oversold conditions. "
             "Usage: Apply 70/30 thresholds and watch for divergence to signal reversals. "
             "Tips: In strong trends, RSI may remain extreme; always cross-check with trend analysis."
+        ),
+        "rsi_6": (
+            "RSI-6 (6-period fast RSI): Short-term momentum indicator, highly sensitive to recent price changes. "
+            "Usage: Use for intraday/short-term signals; overbought >70, oversold <30 (or tighter 80/20 thresholds). "
+            "Tips: Reacts faster than RSI-14 — great for spotting early momentum shifts but prone to whipsaws. "
+            "Cross-confirm with RSI-14 or RSI-21 for higher-confidence entries."
+        ),
+        "rsi_14": (
+            "RSI-14 (14-period standard RSI): The industry-standard momentum oscillator. "
+            "Usage: Apply classic 70/30 overbought/oversold thresholds; watch divergence vs price for reversals. "
+            "Tips: Balanced sensitivity — works well across timeframes. In strong trends RSI may stay extreme; "
+            "combine with trend confirmation tools."
+        ),
+        "rsi_21": (
+            "RSI-21 (21-period slow RSI): Longer-term momentum with reduced noise. "
+            "Usage: Identify sustained overbought/oversold regimes; divergence here is a stronger signal. "
+            "Tips: Slower to react — better for swing/position trading. Use alongside RSI-6 or RSI-14 to "
+            "confirm momentum alignment across timeframes (RSI multi-timeframe confluence)."
         ),
         # Volatility Indicators
         "boll": (
@@ -200,22 +231,25 @@ def _get_stock_stats_bulk(
     data = load_ohlcv(symbol, curr_date)
     df = wrap(data)
     df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
-    
+
+    # Translate indicator name: rsi_N -> N_rsi for stockstats
+    stockstats_col = _translate_indicator(indicator)
+
     # Calculate the indicator for all rows at once
-    df[indicator]  # This triggers stockstats to calculate the indicator
-    
+    df[stockstats_col]  # This triggers stockstats to calculate the indicator
+
     # Create a dictionary mapping date strings to indicator values
     result_dict = {}
     for _, row in df.iterrows():
         date_str = row["Date"]
-        indicator_value = row[indicator]
-        
+        indicator_value = row[stockstats_col]
+
         # Handle NaN/None values
         if pd.isna(indicator_value):
             result_dict[date_str] = "N/A"
         else:
             result_dict[date_str] = str(indicator_value)
-    
+
     return result_dict
 
 

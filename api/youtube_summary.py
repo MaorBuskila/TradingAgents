@@ -1,4 +1,4 @@
-"""Fetch YouTube captions and summarize with OpenAI or Google Gemini (API keys from .env)."""
+"""Fetch YouTube captions and summarize via the same LLM stack as MACD/RSI labs (create_llm_client)."""
 from __future__ import annotations
 
 import os
@@ -7,46 +7,12 @@ from typing import Optional, Tuple
 
 import requests
 from dotenv import load_dotenv
-from openai import OpenAI
+
+from tradingagents.dataflows.llm_invoke import invoke_chat_model_human_message
 
 load_dotenv()
 
 MAX_TRANSCRIPT_CHARS = 55_000
-
-
-def _google_api_key() -> Optional[str]:
-    return os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-
-
-def _resolve_youtube_summary_provider() -> str:
-    """Env YOUTUBE_SUMMARY_PROVIDER: openai | gemini | auto (default: auto)."""
-    raw = (os.getenv("YOUTUBE_SUMMARY_PROVIDER") or "auto").strip().lower()
-    if raw in ("openai", "gemini", "auto"):
-        return raw
-    return "auto"
-
-
-def _pick_provider() -> str:
-    mode = _resolve_youtube_summary_provider()
-    has_google = bool(_google_api_key())
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
-    if mode == "gemini":
-        if not has_google:
-            raise ValueError(
-                "YOUTUBE_SUMMARY_PROVIDER=gemini but GOOGLE_API_KEY (or GEMINI_API_KEY) is not set."
-            )
-        return "gemini"
-    if mode == "openai":
-        if not has_openai:
-            raise ValueError("YOUTUBE_SUMMARY_PROVIDER=openai but OPENAI_API_KEY is not set.")
-        return "openai"
-    if has_google:
-        return "gemini"
-    if has_openai:
-        return "openai"
-    raise ValueError(
-        "Set GOOGLE_API_KEY (or GEMINI_API_KEY) for Gemini, or OPENAI_API_KEY for OpenAI."
-    )
 
 
 def extract_youtube_video_id(url: str) -> Optional[str]:
@@ -183,57 +149,21 @@ def summarize_transcript(
     transcript: str,
     title: Optional[str],
     video_id: str,
+    llm_provider: str,
+    llm_model: Optional[str],
 ) -> Tuple[str, str, str]:
-    """Returns (summary, model_name, provider)."""
+    """Returns (summary, model_name, provider). LangChain: ``HumanMessage`` + chat model ``invoke``."""
     prompt = _build_summary_prompt(transcript, title, video_id)
-    provider = _pick_provider()
-
-    if provider == "gemini":
-        return _summarize_gemini(prompt)
-    return _summarize_openai(prompt)
-
-
-def _summarize_openai(prompt: str) -> Tuple[str, str, str]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY is not set in the environment (.env).")
-
-    model = os.getenv("OPENAI_YOUTUBE_SUMMARY_MODEL", "gpt-4o-mini")
-    client = OpenAI(api_key=api_key)
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.35,
+    provider_lc = llm_provider.strip().lower()
+    summary_raw, usage = invoke_chat_model_human_message(
+        prompt,
+        provider=provider_lc,
+        model=llm_model,
+        strip_json_fences=False,
     )
-    summary = (resp.choices[0].message.content or "").strip()
-    return summary, model, "openai"
-
-
-def _summarize_gemini(prompt: str) -> Tuple[str, str, str]:
-    api_key = _google_api_key()
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY is not set in the environment (.env).")
-
-    # Default updated: gemini-2.0-flash is retired for new API keys (404). Override via GEMINI_YOUTUBE_SUMMARY_MODEL.
-    model = os.getenv("GEMINI_YOUTUBE_SUMMARY_MODEL", "gemini-2.5-flash")
-    from google import genai
-    from google.genai import types
-    from google.genai.errors import ClientError
-
-    client = genai.Client(api_key=api_key)
-    try:
-        resp = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.35),
-        )
-    except ClientError as e:
-        raise ValueError(
-            f"Gemini API error ({model}): {e!s}. "
-            f"Try GEMINI_YOUTUBE_SUMMARY_MODEL=gemini-2.5-flash or another model from Google AI Studio."
-        ) from e
-    summary = (resp.text or "").strip()
-    return summary, model, "gemini"
+    summary = summary_raw.strip()
+    model_used = str(usage.get("model") or llm_model or "")
+    return summary, model_used, provider_lc
 
 
 def translate_summary_to_hebrew(text_en: str) -> str:
@@ -282,7 +212,11 @@ def retranslate_youtube_summary_hebrew(row_id: int) -> dict:
     return dict(updated)
 
 
-def summarize_youtube_url(url: str) -> dict:
+def summarize_youtube_url(
+    url: str,
+    llm_provider: str = "ollama",
+    llm_model: Optional[str] = None,
+) -> dict:
     from .database import insert_youtube_summary
 
     vid = extract_youtube_video_id(url)
@@ -295,7 +229,9 @@ def summarize_youtube_url(url: str) -> dict:
     if not transcript:
         raise ValueError("Transcript is empty.")
 
-    summary_en, model_used, provider = summarize_transcript(transcript, title, vid)
+    summary_en, model_used, provider = summarize_transcript(
+        transcript, title, vid, llm_provider=llm_provider, llm_model=llm_model
+    )
 
     skip_tr = os.getenv("YOUTUBE_SKIP_TRANSLATE", "").lower() in ("1", "true", "yes")
     if skip_tr:

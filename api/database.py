@@ -4,7 +4,14 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "portfolio.db")
+def _project_root() -> Path:
+    """Walk up from this file until pyproject.toml is found (project root)."""
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "pyproject.toml").exists():
+            return candidate
+    return Path(__file__).resolve().parent  # fallback
+
+DB_PATH = str(_project_root() / "data" / "portfolio.db")
 CATALOG_DATA_PATH = Path(__file__).resolve().parent / "catalog_data.json"
 
 
@@ -18,9 +25,38 @@ def init_db():
             quantity REAL NOT NULL,
             cost_basis REAL NOT NULL,
             current_price REAL,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            exchange TEXT DEFAULT 'US',
+            target_weight REAL,
+            notes TEXT
         )
     ''')
+    # Migrate existing positions table to add new columns if they don't exist
+    for col, definition in [
+        ("exchange",      "TEXT DEFAULT 'US'"),
+        ("target_weight", "REAL"),
+        ("notes",         "TEXT"),
+        ("follow_ticker", "TEXT"),
+        ("manual_price",  "REAL"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE positions ADD COLUMN {col} {definition}")
+        except Exception:
+            pass
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS position_lots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER NOT NULL REFERENCES positions(id) ON DELETE CASCADE,
+            purchased_at DATE NOT NULL,
+            price_per_share REAL NOT NULL,
+            quantity REAL NOT NULL,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_lots_position ON position_lots(position_id)"
+    )
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS catalog_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +92,26 @@ def init_db():
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_youtube_summaries_video ON youtube_summaries(video_id)"
     )
+    # RSI optimization cache — one row per ticker, upserted on every re-optimization.
+    # NOTE: the authoritative copy lives in rsi_params.db (tradingagents/dataflows/rsi_cache.py).
+    # This mirror table keeps the API layer aware of cached params for future dashboard display.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS rsi_params_cache (
+            ticker             TEXT PRIMARY KEY,
+            optimal_period     INTEGER NOT NULL,
+            optimal_upper      REAL    NOT NULL,
+            optimal_lower      REAL    NOT NULL,
+            oos_sharpe         REAL    NOT NULL,
+            is_sharpe          REAL    NOT NULL,
+            confidence         TEXT    NOT NULL,
+            regime             TEXT,
+            training_days      INTEGER,
+            test_days          INTEGER,
+            optimizer_provider TEXT,
+            model_used         TEXT,
+            optimized_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
     conn.close()
     seed_catalog_if_needed()
@@ -207,54 +263,6 @@ def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
-
-def get_all_positions() -> List[Dict[str, Any]]:
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM positions")
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
-def add_position(ticker: str, quantity: float, cost_basis: float) -> int:
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO positions (ticker, quantity, cost_basis) VALUES (?, ?, ?)",
-        (ticker.upper(), quantity, cost_basis)
-    )
-    conn.commit()
-    pos_id = cursor.lastrowid
-    conn.close()
-    return pos_id
-
-def update_position(pos_id: int, ticker: str, quantity: float, cost_basis: float):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE positions SET ticker = ?, quantity = ?, cost_basis = ? WHERE id = ?",
-        (ticker.upper(), quantity, cost_basis, pos_id)
-    )
-    conn.commit()
-    conn.close()
-
-def delete_position(pos_id: int):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM positions WHERE id = ?", (pos_id,))
-    conn.commit()
-    conn.close()
-
-def update_prices(prices: Dict[str, float]):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    for ticker, price in prices.items():
-        cursor.execute(
-            "UPDATE positions SET current_price = ?, last_updated = CURRENT_TIMESTAMP WHERE ticker = ?",
-            (price, ticker.upper())
-        )
-    conn.commit()
-    conn.close()
 
 
 def insert_youtube_summary(

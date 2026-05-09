@@ -270,7 +270,16 @@ export default function Watchlist() {
                       </button>
                     </td>
                     <td>
-                      <strong>{r.ticker}</strong>
+                      <a
+                        href={`https://www.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontWeight: 700, textDecoration: 'none', color: 'var(--accent, #4f8ef7)' }}
+                        onMouseEnter={(e) => ((e.target as HTMLAnchorElement).style.textDecoration = 'underline')}
+                        onMouseLeave={(e) => ((e.target as HTMLAnchorElement).style.textDecoration = 'none')}
+                      >
+                        {r.ticker}
+                      </a>
                     </td>
                     <td>{r.name || '—'}</td>
                     <td>{r.category_label || r.category}</td>

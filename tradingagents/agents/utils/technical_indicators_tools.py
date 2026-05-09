@@ -1,6 +1,9 @@
 from langchain_core.tools import tool
 from typing import Annotated
 from tradingagents.dataflows.interface import route_to_vendor
+from tradingagents.quant_ml.signals.macd_signal import compute_macd_signal
+from tradingagents.quant_ml.signals.rsi_signal import compute_rsi_signal
+from tradingagents.quant_ml.optimizers.macd_dt_optimizer import run_dt_optimizer
 
 @tool
 def get_indicators(

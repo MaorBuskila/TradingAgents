@@ -14,13 +14,39 @@ def create_market_analyst(llm):
         current_date = state["trade_date"]
         instrument_context = build_instrument_context(state["company_of_interest"])
 
+        # ── Adaptive RSI context from walk-forward optimization ─────────────
+        rsi_period     = state.get("rsi_optimal_period", 14)
+        rsi_upper      = state.get("rsi_optimal_upper",  70.0)
+        rsi_lower      = state.get("rsi_optimal_lower",  30.0)
+        rsi_oos_sharpe = state.get("rsi_oos_sharpe",     0.0)
+        rsi_confidence = state.get("rsi_confidence",     "UNKNOWN")
+        rsi_regime     = state.get("rsi_regime",         "unknown")
+        rsi_from_cache = state.get("rsi_from_cache",     False)
+        cache_label    = " (from cache)" if rsi_from_cache else " (freshly optimized)"
+
+        adaptive_rsi_context = f"""
+⚡ ADAPTIVE RSI OPTIMIZATION RESULTS{cache_label}:
+  • Optimal Period    : {rsi_period}  (default RSI uses 14)
+  • Overbought Level  : {rsi_upper}  (default 70)
+  • Oversold Level    : {rsi_lower}  (default 30)
+  • OOS Sharpe Ratio  : {rsi_oos_sharpe:.3f}
+  • Confidence        : {rsi_confidence}
+  • Market Regime     : {rsi_regime}
+
+IMPORTANT: When selecting and interpreting RSI indicators, use RSI({rsi_period}) as your primary momentum indicator.
+Apply {rsi_upper} as the overbought threshold and {rsi_lower} as the oversold threshold — NOT the standard 70/30 defaults.
+These parameters were walk-forward validated on out-of-sample data for this specific ticker.
+"""
+        # ───────────────────────────────────────────────────────────────────
+
         tools = [
             get_stock_data,
             get_indicators,
         ]
 
         system_message = (
-            """You are a trading assistant tasked with analyzing financial markets. Your role is to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:
+            adaptive_rsi_context
+            + """You are a trading assistant tasked with analyzing financial markets. Your role is to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:
 
 Moving Averages:
 - close_50_sma: 50 SMA: A medium-term trend indicator. Usage: Identify trend direction and serve as dynamic support/resistance. Tips: It lags price; combine with faster indicators for timely signals.
@@ -33,7 +59,12 @@ MACD Related:
 - macdh: MACD Histogram: Shows the gap between the MACD line and its signal. Usage: Visualize momentum strength and spot divergence early. Tips: Can be volatile; complement with additional filters in fast-moving markets.
 
 Momentum Indicators:
-- rsi: RSI: Measures momentum to flag overbought/oversold conditions. Usage: Apply 70/30 thresholds and watch for divergence to signal reversals. Tips: In strong trends, RSI may remain extreme; always cross-check with trend analysis.
+- rsi: RSI (14-period default): Measures momentum to flag overbought/oversold conditions. Usage: Apply 70/30 thresholds and watch for divergence to signal reversals. Tips: In strong trends, RSI may remain extreme; always cross-check with trend analysis.
+- rsi_6: RSI-6 (fast, 6-period): Highly responsive short-term momentum. Usage: Early entry/exit signals; overbought >70, oversold <30 (or tighter 80/20). Tips: Prone to whipsaws — cross-confirm with rsi_14 or rsi_21.
+- rsi_14: RSI-14 (standard, 14-period): Industry-standard oscillator. Usage: Classic 70/30 thresholds and divergence analysis. Tips: Best balance of sensitivity vs noise. Equivalent to 'rsi'.
+- rsi_21: RSI-21 (slow, 21-period): Smoothed long-term momentum. Usage: Identify sustained overbought/oversold regimes; divergence is a stronger signal. Tips: Best for swing/position trades. Use with rsi_6 for multi-timeframe confluence.
+
+NOTE: For a richer momentum picture, consider requesting multiple RSI periods (e.g. rsi_6 + rsi_21) to observe short vs long-term momentum alignment — this is called RSI multi-timeframe confluence. When rsi_6 > rsi_21 and both are rising, momentum is strongly bullish. When they diverge, a reversal may be forming.
 
 Volatility Indicators:
 - boll: Bollinger Middle: A 20 SMA serving as the basis for Bollinger Bands. Usage: Acts as a dynamic benchmark for price movement. Tips: Combine with the upper and lower bands to effectively spot breakouts or reversals.
