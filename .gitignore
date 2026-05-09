@@ -1,20 +1,24 @@
+# ── Generated output (analysis runs, evals, reports) ────────────────────────
+eval_results/
+reports/
+results/
+data/
+
+# ── Claude Code workspace ────────────────────────────────────────────────────
+.claude/
+
 # ── Runtime data & SQLite databases ─────────────────────────────────────────
-data/*.db
-data/*.db-journal
+*.db
 *.db-journal
 *.tmp
-
-# Root-level stale DB artifacts (delete these files manually)
-macd_cache.db
-rsi_cache.db
-rsi_params.db
-rsi_test.db
-portfolio.db
 
 # Temp / scratch files
 test_write.tmp
 *.xlsx~
 .~lock.*
+scratch_*.py
+0323.md
+todo
 
 # ── Byte-compiled / optimized / DLL files ───────────────────────────────────
 __pycache__/
@@ -23,6 +27,9 @@ __pycache__/
 
 # C extensions
 *.so
+
+# macOS
+.DS_Store
 
 # Distribution / packaging
 .Python
@@ -235,3 +242,8 @@ __marimo__/
 
 # Cache
 **/data_cache/
+tradingagents/chroma_db/
+
+# Frontend build artifacts
+frontend/dist/
+frontend/node_modules/
