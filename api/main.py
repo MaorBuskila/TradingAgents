@@ -135,12 +135,33 @@ def analysis_provider_env_hint(provider: str) -> str:
 
 app = FastAPI(title="TradingAgents API")
 
+_SKIP_AUTH_PATHS = {"/docs", "/openapi.json", "/redoc"}
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    # Localhost always allowed (Vite dev server, Telegram bot on same machine)
+    client_ip = request.client.host if request.client else ""
+    if client_ip in ("127.0.0.1", "::1"):
+        return await call_next(request)
+    # Docs and schema always allowed
+    if request.url.path in _SKIP_AUTH_PATHS:
+        return await call_next(request)
+    expected = (os.getenv("API_KEY") or "").strip()
+    if expected:
+        provided = (request.headers.get("X-API-Key") or "").strip()
+        if provided != expected:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": "Invalid or missing API key"}, status_code=403)
+    return await call_next(request)
+
+# Allow both local dev and the server's public origin
+_extra_origins = [o for o in [os.getenv("FRONTEND_ORIGIN", "")] if o]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"] + _extra_origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-API-Key"],
 )
 
 app.include_router(portfolio_router, prefix="/api")

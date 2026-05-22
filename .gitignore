@@ -251,3 +251,5 @@ chroma_db/
 # Frontend build artifacts
 frontend/dist/
 frontend/node_modules/
+frontend/env.production
+frontend/.env.production
