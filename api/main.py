@@ -135,16 +135,15 @@ def analysis_provider_env_hint(provider: str) -> str:
 
 app = FastAPI(title="TradingAgents API")
 
-_SKIP_AUTH_PATHS = {"/docs", "/openapi.json", "/redoc"}
-
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
-    # Localhost always allowed (Vite dev server, Telegram bot on same machine)
+    # Only API routes require a key; static UI files and docs stay public so
+    # the browser can load the page (a navigation can't send custom headers).
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+    # Localhost always allowed (Vite dev proxy, Telegram bot on same machine)
     client_ip = request.client.host if request.client else ""
     if client_ip in ("127.0.0.1", "::1"):
-        return await call_next(request)
-    # Docs and schema always allowed
-    if request.url.path in _SKIP_AUTH_PATHS:
         return await call_next(request)
     expected = (os.getenv("API_KEY") or "").strip()
     if expected:
@@ -1634,3 +1633,19 @@ def sniper_optimize(req: SniperOptimizeRequest):
         macd=macd_result,
         summary=summary,
     )
+
+
+# Serve the built frontend (production). No-op in local dev if dist/ is absent.
+_FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+if _FRONTEND_DIST.is_dir():
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        """Serve index.html for any non-API route so client-side routing works."""
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        return FileResponse(_FRONTEND_DIST / "index.html")
