@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, Link, useLocation } from 'react-router-dom'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import { Loader2, Sparkles } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
@@ -319,6 +320,7 @@ function statusClass(st: string): string {
 }
 
 export default function RunAnalysis() {
+  const log = useTabLogger('RunAnalysis')
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const tickerFromUrl = searchParams.get('ticker')?.trim()
@@ -548,7 +550,9 @@ export default function RunAnalysis() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    log('action:start-analysis', { ticker: formData.ticker, provider: formData.llm_provider })
     try {
+      log('api:start', { endpoint: 'analyze' })
       setJobId(null)
       sessionStorage.removeItem(RUN_ANALYSIS_STORAGE_KEY)
       sessionStorage.removeItem(LEGACY_RUN_STORAGE_KEY)
@@ -572,8 +576,9 @@ export default function RunAnalysis() {
       setJobStartedAt(t)
       setLastEventAt(t)
       setJobId(res.data.job_id)
+      log('api:success', { jobId: res.data.job_id })
     } catch (err) {
-      console.error(err)
+      log('api:error', err)
       setStatus('error')
     }
   }

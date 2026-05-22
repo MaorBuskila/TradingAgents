@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import ReactMarkdown from 'react-markdown'
 import { Clapperboard, Loader2 } from 'lucide-react'
 
@@ -54,6 +55,7 @@ const LLM_MODELS: Record<string, { label: string; value: string }[]> = {
 }
 
 export default function YouTubeSummary() {
+  const log = useTabLogger('YouTubeSummary')
   const [url, setUrl] = useState('https://www.youtube.com/watch?v=Vov0WMe3Dvc')
   const [llmProvider, setLlmProvider] = useState('ollama')
   const [llmModel, setLlmModel] = useState('gemma4:e4b')
@@ -86,7 +88,9 @@ export default function YouTubeSummary() {
     setError(null)
     setResult(null)
     setLoading(true)
+    log('action:submit', { url: url.trim(), provider: llmProvider })
     try {
+      log('api:start', { endpoint: 'youtube/summarize' })
       const res = await axios.post<SummaryResult>(`${API_BASE}/youtube/summarize`, {
         url: url.trim(),
         llm_provider: llmProvider,
@@ -94,8 +98,10 @@ export default function YouTubeSummary() {
       })
       setResult(res.data)
       setTab('en')
+      log('api:success')
       refreshList()
     } catch (err: unknown) {
+      log('api:error', err)
       if (axios.isAxiosError(err)) {
         const raw = err.response?.data
         let msg = err.message

@@ -21,6 +21,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ReferenceLine, LineChart, Line, Cell, ComposedChart,
@@ -266,6 +267,7 @@ function mergeChartData(algo: PeriodPoint[], llm: PeriodPoint[]) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function RSILab() {
+  const log = useTabLogger('RSILab')
   // Provider → available models (matches llm_catalog.py)
   const LLM_MODELS: Record<string, { label: string; value: string }[]> = {
     google: [
@@ -543,8 +545,9 @@ export default function RSILab() {
     setLoading(true)
     setError(null)
     setResult(null)
-
+    log('action:run-algo', { symbol: symbol.toUpperCase().trim() })
     try {
+      log('api:start', { endpoint: 'rsi-optimize' })
       const res = await axios.post(`${API_BASE}/rsi-optimize`, {
         symbol:       symbol.toUpperCase().trim(),
         date,
@@ -554,10 +557,12 @@ export default function RSILab() {
         llm_model:    llmModel,
       }, { signal: controller.signal })
       setResult(res.data)
+      log('api:success')
       loadCache()
       loadSignals()
     } catch (err: any) {
       if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return
+      log('api:error', err)
       setError(err.response?.data?.detail ?? err.message ?? 'Unknown error')
     } finally {
       setLoading(false)

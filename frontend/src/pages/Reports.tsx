@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import ReactMarkdown from 'react-markdown'
 import { FileSearch, RefreshCw } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
 export default function Reports() {
+  const log = useTabLogger('Reports')
   const [reports, setReports] = useState<{ id: string; ticker: string; date: string }[]>([])
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
   const [reportContent, setReportContent] = useState<string>('')
@@ -20,10 +22,12 @@ export default function Reports() {
   const fetchReports = async () => {
     setLoadingList(true)
     try {
+      log('api:start', { endpoint: 'reports' })
       const res = await axios.get(`${API_BASE}/reports`)
       setReports(res.data)
+      log('api:success')
     } catch (err) {
-      console.error(err)
+      log('api:error', err)
     } finally {
       setLoadingList(false)
     }
@@ -32,12 +36,15 @@ export default function Reports() {
   const loadReport = async (id: string) => {
     setLoadingDoc(true)
     if (id !== selectedReport) setReportContent('')
+    log('action:load-report', { id })
     try {
+      log('api:start', { endpoint: `reports/${id}` })
       const res = await axios.get(`${API_BASE}/reports/${id}`)
       setReportContent(res.data.content)
       setSelectedReport(id)
+      log('api:success')
     } catch (err) {
-      console.error(err)
+      log('api:error', err)
     } finally {
       setLoadingDoc(false)
     }

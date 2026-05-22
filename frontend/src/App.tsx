@@ -1,5 +1,5 @@
 import { Routes, Route, NavLink } from 'react-router-dom'
-import { PlayCircle, FileText, PieChart, ListOrdered, Video, FlaskConical, Activity, Newspaper } from 'lucide-react'
+import { PlayCircle, FileText, PieChart, ListOrdered, Video, FlaskConical, Activity, Newspaper, Crosshair, Target, BarChart2 } from 'lucide-react'
 import RunAnalysis from './pages/RunAnalysis'
 import Reports from './pages/Reports'
 import Portfolio from './portfolio'
@@ -8,6 +8,10 @@ import YouTubeSummary from './pages/YouTubeSummary'
 import RSILab from './pages/RSILab'
 import MACDLab from './pages/MACDLab'
 import NewsLab from './pages/NewsLab'
+import RSIFeatureLab from './pages/RSIFeatureLab'
+import SniperLab from './pages/SniperLab'
+import TPTracker from './pages/TPTracker'
+import FundamentalsLab from './pages/FundamentalsLab'
 
 const nav = [
   { to: '/', label: 'Run analysis', icon: PlayCircle, end: true },
@@ -15,9 +19,13 @@ const nav = [
   { to: '/portfolio', label: 'Portfolio', icon: PieChart },
   { to: '/watchlist', label: 'Watchlist', icon: ListOrdered },
   { to: '/youtube', label: 'YouTube', icon: Video },
+  { to: '/fundamentals-lab', label: 'Fundamentals Lab', icon: BarChart2 },
   { to: '/rsi-lab', label: 'RSI Lab', icon: FlaskConical },
   { to: '/macd-lab', label: 'MACD Lab', icon: Activity },
   { to: '/news-lab', label: 'News Lab', icon: Newspaper },
+  { to: '/rsi-feature-lab', label: 'RSI Feature Lab', icon: FlaskConical },
+  { to: '/sniper-lab', label: 'Sniper Lab', icon: Crosshair },
+  { to: '/tp-tracker', label: 'TP Tracker', icon: Target },
 ]
 
 function App() {
@@ -60,6 +68,10 @@ function App() {
           <Route path="/rsi-lab" element={<RSILab />} />
           <Route path="/macd-lab" element={<MACDLab />} />
           <Route path="/news-lab" element={<NewsLab />} />
+          <Route path="/rsi-feature-lab" element={<RSIFeatureLab />} />
+          <Route path="/sniper-lab" element={<SniperLab />} />
+          <Route path="/tp-tracker" element={<TPTracker />} />
+          <Route path="/fundamentals-lab" element={<FundamentalsLab />} />
         </Routes>
       </main>
     </div>

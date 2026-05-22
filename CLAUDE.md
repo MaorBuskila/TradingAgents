@@ -130,6 +130,30 @@ scikit-learn, pandas, numpy, Rich, Typer, python-telegram-bot, uvicorn, Pydantic
 - `/schedule` — to set up daily watchlist analysis cron jobs
 - `/init` — if CLAUDE.md becomes stale after major refactors
 
+## Frontend Tab Logging Rule
+
+Every new page component (tab) MUST import and call `useTabLogger` from
+`frontend/src/hooks/useTabLogger.ts`:
+
+```tsx
+import { useTabLogger } from '../hooks/useTabLogger';
+
+export default function MyTab() {
+  const log = useTabLogger('MyTab');
+  ...
+}
+```
+
+**Required events (minimum):**
+- Mount and unmount are logged automatically by the hook
+- Log API call lifecycle: `log('api:start', { endpoint })`, `log('api:success')`, `log('api:error', err)`
+- Log key user interactions: `log('action:submit')`, `log('action:reset')`, etc.
+
+**Format:** `[Tab:TabName] event { optional data }` — structured, one line per event.
+Uses `console.debug` — visible in DevTools "Verbose" level; silent in production by default.
+
+---
+
 ## Readability & Documentation Standards
 
 ### Agent Node Functions — Required Docstring

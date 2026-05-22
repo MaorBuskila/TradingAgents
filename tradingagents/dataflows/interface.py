@@ -31,6 +31,15 @@ from .yfinance_extras import (
 )
 from .reddit_sentiment import get_reddit_sentiment, get_reddit_trending_tickers
 from .fear_greed import get_fear_greed
+from .sec_edgar import get_cik_for_ticker, get_recent_filings, get_filing_text
+from .finnhub_fundamentals import get_analyst_consensus, get_price_targets
+from .fundamentals_structured import (
+    get_ratios,
+    get_income_trend,
+    get_balance_sheet_snapshot,
+    get_cashflow_health,
+    get_earnings_history,
+)
 
 # Configuration and routing logic
 from tradingagents.dataflows.config import get_config
@@ -71,6 +80,21 @@ TOOLS_CATEGORIES = {
             "get_reddit_sentiment",
             "get_reddit_trending_tickers",
             "get_fear_greed",
+        ]
+    },
+    "fundamentals_lab": {
+        "description": "Structured fundamentals, SEC filings, analyst consensus",
+        "tools": [
+            "get_ratios",
+            "get_income_trend",
+            "get_balance_sheet_snapshot",
+            "get_cashflow_health",
+            "get_earnings_history",
+            "get_cik_for_ticker",
+            "get_recent_filings",
+            "get_filing_text",
+            "get_analyst_consensus",
+            "get_price_targets",
         ]
     }
 }
@@ -145,6 +169,17 @@ VENDOR_METHODS = {
     "get_fear_greed": {
         "yfinance": get_fear_greed,
     },
+    # fundamentals_lab — structured JSON data for the Fundamentals Lab UI
+    "get_ratios": {"yfinance": get_ratios},
+    "get_income_trend": {"yfinance": get_income_trend},
+    "get_balance_sheet_snapshot": {"yfinance": get_balance_sheet_snapshot},
+    "get_cashflow_health": {"yfinance": get_cashflow_health},
+    "get_earnings_history": {"yfinance": get_earnings_history},
+    "get_cik_for_ticker": {"sec_edgar": get_cik_for_ticker},
+    "get_recent_filings": {"sec_edgar": get_recent_filings},
+    "get_filing_text": {"sec_edgar": get_filing_text},
+    "get_analyst_consensus": {"finnhub": get_analyst_consensus},
+    "get_price_targets": {"finnhub": get_price_targets},
 }
 
 def get_category_for_method(method: str) -> str:

@@ -51,10 +51,17 @@ from .models import (
     RsiDtPortfolioRequest,
     RsiDtPortfolioResponse,
     RsiDtPosition,
+    RsiDtFeatureLabRequest,
+    RsiDtFeatureLabResultRow,
+    RsiDtFeatureLabResponse,
     OosTestRequest,
     OosTestResponse,
     OosTestDateRow,
     OosTestSummary,
+    SniperOptimizeRequest,
+    SniperOptimizeResponse,
+    SniperEmaResult,
+    SniperDtResult,
 )
 from . import youtube_summary
 from .database import (
@@ -138,6 +145,12 @@ app.add_middleware(
 
 app.include_router(portfolio_router, prefix="/api")
 app.include_router(news_router, prefix="/api")
+
+from api.tp_tracker import router as tp_tracker_router
+app.include_router(tp_tracker_router, prefix="/api")
+
+from api.fundamentals import router as fundamentals_router
+app.include_router(fundamentals_router, prefix="/api")
 
 # In-memory job store
 jobs = {}
@@ -1227,6 +1240,60 @@ def rsi_dt_portfolio(req: RsiDtPortfolioRequest):
     )
 
 
+# ── RSI DT Feature Lab ───────────────────────────────────────────────────────
+
+@app.post("/api/rsi-dt-feature-lab", response_model=RsiDtFeatureLabResponse)
+def rsi_dt_feature_lab(req: RsiDtFeatureLabRequest):
+    """
+    Run selected RSI DT rule sets for a symbol and return side-by-side OOS
+    comparison. Data and sentiment are fetched once; rule sets run in parallel.
+    Results are persisted to data/rsi_dt_experiments.db.
+    """
+    from tradingagents.quant_ml.experiments.experiment_runner import run_feature_lab
+    import uuid, datetime as _dt
+
+    symbol = req.symbol.upper().strip()
+    run_id = str(uuid.uuid4())
+    try:
+        results = run_feature_lab(
+            symbol=symbol,
+            curr_date=req.date,
+            rule_set_names=req.rule_sets,
+            custom_features=req.custom_features,
+            custom_vetos=req.custom_vetos,
+            is_days=req.is_days,
+            oos_days=req.oos_days,
+            label_horizon=req.label_horizon,
+            tp_mult=req.tp_mult,
+            sl_mult=req.sl_mult,
+            rsi_period=req.rsi_period,
+            run_id=run_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Feature lab failed: {e}")
+
+    winner = max(results, key=lambda r: r["oos_sharpe"])["rule_set_name"] if results else None
+    ran_at = _dt.datetime.utcnow().isoformat()
+    return RsiDtFeatureLabResponse(
+        run_id=run_id,
+        symbol=symbol,
+        date=req.date,
+        results=[RsiDtFeatureLabResultRow(**{k: v for k, v in r.items() if k in RsiDtFeatureLabResultRow.model_fields}) for r in results],
+        winner=winner,
+        ran_at=ran_at,
+    )
+
+
+@app.get("/api/rsi-dt-feature-lab/{symbol}", response_model=List[RsiDtFeatureLabResultRow])
+def rsi_dt_feature_lab_history(symbol: str, limit: int = 50):
+    """Retrieve past Feature Lab experiment runs for a symbol."""
+    from tradingagents.quant_ml.experiments.experiment_db import get_experiment_runs
+    rows = get_experiment_runs(symbol.upper().strip(), limit=min(limit, 200))
+    return [RsiDtFeatureLabResultRow(**r) for r in rows]
+
+
 # ── OOS Integration Tests ─────────────────────────────────────────────────────
 
 def _build_oos_dates(oos_start: str, oos_end: str, n: int) -> list[str]:
@@ -1450,4 +1517,99 @@ def rsi_oos_test(req: OosTestRequest):
         rows=rows,
         summary=summary,
         algo_type="rsi",
+    )
+
+
+@app.get("/api/sniper-signal/{ticker}")
+def sniper_signal_get(ticker: str, date: str | None = None):
+    """Return latest Sniper action, grades, SL/TP, vol regime for a ticker."""
+    from tradingagents.quant_ml.signals.sniper_signal import compute_sniper_signal
+    result = compute_sniper_signal(ticker.upper().strip(), as_of_date=date)
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+    return result
+
+
+@app.post("/api/sniper-optimize", response_model=SniperOptimizeResponse)
+def sniper_optimize(req: SniperOptimizeRequest):
+    """
+    Run the full Sniper optimization pipeline for a symbol:
+      1. RSI algo WFO   → rsi_cache.db
+      2. MACD algo WFO  → macd_cache.db
+      3. EMA algo WFO   → ema_cache.db
+      4. Sniper DT WFO  → sniper_cache.db (DT thresholds)
+
+    The DT optimizer reads EMA params from ema_cache, so step 3 must complete first.
+    """
+    from tradingagents.quant_ml.optimizers.rsi_optimizer_algo import (
+        run_algo_optimizer as rsi_algo,
+    )
+    from tradingagents.quant_ml.optimizers.macd_optimizer_algo import (
+        run_algo_optimizer as macd_algo,
+    )
+    from tradingagents.quant_ml.optimizers.ema_optimizer_algo import (
+        run_algo_optimizer as ema_algo,
+    )
+    from tradingagents.quant_ml.optimizers.sniper_dt_optimizer import (
+        run_sniper_dt_optimizer,
+    )
+    from tradingagents.dataflows.sniper_cache import upsert_sniper_params
+
+    sym = req.symbol.upper().strip()
+
+    rsi_result  = rsi_algo(sym,  req.date, req.is_days, req.oos_days)
+    macd_result = macd_algo(sym, req.date, req.is_days, req.oos_days)
+    ema_result  = ema_algo(sym,  req.date, req.is_days, req.oos_days)
+
+    dt_result = run_sniper_dt_optimizer(
+        sym, req.date,
+        is_days=req.dt_is_days,
+        oos_days=req.dt_oos_days,
+    )
+
+    upsert_sniper_params(
+        ticker=sym,
+        threshold_a=float(dt_result["threshold_a"]),
+        threshold_b=float(dt_result["threshold_b"]),
+        dt_oos_sharpe=float(dt_result["oos_sharpe"]),
+        dt_oos_hit_rate=float(dt_result["oos_hit_rate"]),
+        training_days=int(req.dt_is_days),
+        test_days=int(req.dt_oos_days),
+    )
+
+    ema = SniperEmaResult(
+        optimal_fast=int(ema_result["optimal_fast"]),
+        optimal_slow=int(ema_result["optimal_slow"]),
+        optimal_trend=int(ema_result["optimal_trend"]),
+        is_sharpe=float(ema_result["is_sharpe"]),
+        oos_sharpe=float(ema_result["oos_sharpe"]),
+        confidence=str(ema_result["confidence"]),
+        combos_tested=int(ema_result["combos_tested"]),
+        default_oos_sharpe=float(ema_result["default_oos_sharpe"]),
+    )
+    dt = SniperDtResult(
+        last_signal=int(dt_result["last_signal"]),
+        last_prob_a=float(dt_result["last_prob_a"]),
+        last_prob_b=float(dt_result["last_prob_b"]),
+        threshold_a=float(dt_result["threshold_a"]),
+        threshold_b=float(dt_result["threshold_b"]),
+        oos_sharpe=float(dt_result["oos_sharpe"]),
+        oos_hit_rate=float(dt_result["oos_hit_rate"]),
+        bull_score_today=float(dt_result["bull_score_today"]),
+        grade_veto_ok=bool(dt_result["grade_veto_ok"]),
+        confidence=str(dt_result["confidence"]),
+    )
+    summary = (
+        f"EMA({ema.optimal_fast}/{ema.optimal_slow}/{ema.optimal_trend}) "
+        f"OOS {ema.oos_sharpe:.2f} [{ema.confidence}] | "
+        f"DT OOS {dt.oos_sharpe:.2f} [{dt.confidence}]"
+    )
+    return SniperOptimizeResponse(
+        symbol=sym,
+        date=req.date,
+        ema=ema,
+        dt=dt,
+        rsi=rsi_result,
+        macd=macd_result,
+        summary=summary,
     )

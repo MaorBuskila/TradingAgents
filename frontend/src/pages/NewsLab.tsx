@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
@@ -205,6 +206,7 @@ function StopButton({ onClick }: { onClick: () => void }) {
 // ---------------------------------------------------------------------------
 
 export default function NewsLab() {
+  const log = useTabLogger('NewsLab')
   // ── Trending (market movers) ──
   const [screener, setScreener] = useState('most_actives')
   const [trending, setTrending] = useState<TrendingStock[]>([])
@@ -286,10 +288,15 @@ export default function NewsLab() {
   // ── Market movers ──
   async function fetchTrending() {
     setTrendingLoading(true)
+    log('action:fetch', { section: 'trending', screener })
     try {
+      log('api:start', { endpoint: 'news/trending' })
       const res = await axios.get(`${API_BASE}/news/trending`, { params: { screener, count: 25 } })
       setTrending(res.data)
-    } catch { /* ignore */ } finally {
+      log('api:success')
+    } catch (err) {
+      log('api:error', err)
+    } finally {
       setTrendingLoading(false)
     }
   }

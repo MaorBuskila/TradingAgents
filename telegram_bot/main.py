@@ -364,15 +364,26 @@ async def post_init(app: Application) -> None:
     async def job() -> None:
         await _send_digest_to_chat(app, cid)
 
+    async def earnings_job() -> None:
+        from telegram_bot.earnings_watcher import check_earnings_alerts
+        await check_earnings_alerts(app.bot, cid, api_base=API_BASE)
+
     sched.add_job(
         job,
         CronTrigger(hour=REMINDER_HOUR, minute=REMINDER_MINUTE),
         id="favorites_digest",
         replace_existing=True,
     )
+    sched.add_job(
+        earnings_job,
+        CronTrigger(hour=8, minute=30),
+        id="earnings_alerts",
+        replace_existing=True,
+    )
     sched.start()
     app.bot_data["scheduler"] = sched
     logger.info("Reminder scheduler started for chat_id=%s at %02d:%02d", cid, REMINDER_HOUR, REMINDER_MINUTE)
+    logger.info("Earnings alert scheduler started for chat_id=%s at 08:30 daily", cid)
 
 
 async def post_shutdown(app: Application) -> None:

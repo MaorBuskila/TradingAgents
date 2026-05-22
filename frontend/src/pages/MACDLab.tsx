@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, ComposedChart, Line, Cell,
@@ -279,6 +280,7 @@ const pillStyle: React.CSSProperties = {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function MACDLab() {
+  const log = useTabLogger('MACDLab')
   const LLM_MODELS: Record<string, { label: string; value: string }[]> = {
     google: [
       { label: 'Gemini 2.5 Flash — balanced, stable',    value: 'gemini-2.5-flash' },
@@ -434,7 +436,9 @@ export default function MACDLab() {
     const controller = new AbortController()
     abortOptRef.current = controller
     setLoading(true); setError(null); setResult(null)
+    log('action:run-algo', { symbol: symbol.toUpperCase().trim() })
     try {
+      log('api:start', { endpoint: 'macd-optimize' })
       const res = await axios.post(`${API_BASE}/macd-optimize`, {
         symbol:       symbol.toUpperCase().trim(),
         date,
@@ -444,10 +448,12 @@ export default function MACDLab() {
         llm_model:    llmModel,
       }, { signal: controller.signal })
       setResult(res.data)
+      log('api:success')
       loadCache()
       loadSignals()
     } catch (err: any) {
       if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return
+      log('api:error', err)
       setError(err.response?.data?.detail ?? err.message ?? 'Unknown error')
     } finally {
       setLoading(false)

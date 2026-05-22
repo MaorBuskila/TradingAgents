@@ -3,22 +3,19 @@
  */
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import { Crosshair, Loader2, RefreshCw, TrendingUp, TrendingDown, Minus, ShieldCheck, ShieldAlert, Activity, Target, BarChart2, Zap, Square } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
-interface SniperAlgo {
-  optimal_ema_fast: number
-  optimal_ema_slow: number
-  optimal_ema_trend: number
-  optimal_min_score: number
-  optimal_sl_mult: number
-  optimal_vol_mult: number
+interface SniperEma {
+  optimal_fast: number
+  optimal_slow: number
+  optimal_trend: number
   is_sharpe: number
   oos_sharpe: number
   confidence: string
   combos_tested: number
-  default_is_sharpe: number
   default_oos_sharpe: number
 }
 
@@ -66,7 +63,7 @@ interface MacdWfoResult {
 interface SniperOptimizeResponse {
   symbol: string
   date: string
-  classical: SniperAlgo
+  ema: SniperEma
   dt: SniperDt
   summary: string
   rsi: RsiWfoResult | null
@@ -215,20 +212,24 @@ function CardSection({ icon, title, accent, children }: {
 // ── component ──────────────────────────────────────────────────────────────
 
 export default function SniperLab() {
+  const log = useTabLogger('SniperLab')
   const [symbol, setSymbol] = useState('SPY')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [isDays, setIsDays] = useState(180)
+  const [isDays, setIsDays] = useState(252)
   const [oosDays, setOosDays] = useState(90)
-  const [dtIs, setDtIs] = useState(1000)
-  const [dtOos, setDtOos] = useState(20)
+  const [dtIs, setDtIs] = useState(750)
+  const [dtOos, setDtOos] = useState(60)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [opt, setOpt] = useState<SniperOptimizeResponse | null>(null)
   const [sig, setSig] = useState<SniperSignal | null>(null)
+  const [trackingSignal, setTrackingSignal] = useState(false)
+  const [trackResult, setTrackResult] = useState<{ ticker: string } | null>(null)
+  const [trackErr, setTrackErr] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
 
-  const SESSION_KEY = 'tradingagents_sniperlab_v1'
+  const SESSION_KEY = 'tradingagents_sniperlab_v2'
 
   useEffect(() => {
     const saved = sessionStorage.getItem(SESSION_KEY)
@@ -250,6 +251,27 @@ export default function SniperLab() {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify({ symbol, date, isDays, oosDays, dtIs, dtOos, opt, sig }))
   }, [symbol, date, isDays, oosDays, dtIs, dtOos, opt, sig])
 
+  async function handleTrackSignal() {
+    if (!sig) return
+    setTrackingSignal(true)
+    setTrackErr(null)
+    setTrackResult(null)
+    try {
+      const { data } = await axios.post(`${API_BASE}/tp-tracker/from-signal`, {
+        ticker: sig.ticker,
+        date: sig.as_of_date,
+      })
+      setTrackResult({ ticker: data.ticker })
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? 'Failed to create tracker'
+      setTrackErr(msg)
+    } finally {
+      setTrackingSignal(false)
+    }
+  }
+
   async function runOptimize() {
     const controller = new AbortController()
     abortRef.current = controller
@@ -257,7 +279,9 @@ export default function SniperLab() {
     setErr(null)
     setOpt(null)
     setSig(null)
+    log('action:run', { symbol: symbol.trim().toUpperCase() })
     try {
+      log('api:start', { endpoint: 'sniper-optimize' })
       const { data } = await axios.post<SniperOptimizeResponse>(`${API_BASE}/sniper-optimize`, {
         symbol: symbol.trim().toUpperCase(),
         date,
@@ -272,8 +296,10 @@ export default function SniperLab() {
         signal: controller.signal,
       })
       setSig(sg.data)
+      log('api:success')
     } catch (e: unknown) {
       if (axios.isCancel(e) || (e instanceof Error && (e.name === 'CanceledError' || e.name === 'AbortError'))) return
+      log('api:error', e)
       const msg = axios.isAxiosError(e) ? e.response?.data?.detail ?? e.message : String(e)
       setErr(String(msg))
     } finally {
@@ -448,46 +474,37 @@ export default function SniperLab() {
       {/* ── WFO + DT cards ── */}
       {opt && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          {/* Classical WFO */}
-          <CardSection icon={<BarChart2 size={17} />} title="Classical WFO" accent="#6366f1">
+          {/* EMA Walk-Forward */}
+          <CardSection icon={<BarChart2 size={17} />} title="EMA Walk-Forward" accent="#6366f1">
             <MetricRow
-              label="EMA stack"
+              label="EMA stack (fast/slow/trend)"
               value={
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.875rem', letterSpacing: '0.02em' }}>
-                  {opt.classical.optimal_ema_fast}&thinsp;/&thinsp;{opt.classical.optimal_ema_slow}&thinsp;/&thinsp;{opt.classical.optimal_ema_trend}
-                </span>
-              }
-            />
-            <MetricRow label="Min score" value={opt.classical.optimal_min_score} />
-            <MetricRow
-              label="SL / Vol mult"
-              value={
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
-                  {opt.classical.optimal_sl_mult}&thinsp;/&thinsp;{opt.classical.optimal_vol_mult}
+                  {opt.ema.optimal_fast}&thinsp;/&thinsp;{opt.ema.optimal_slow}&thinsp;/&thinsp;{opt.ema.optimal_trend}
                 </span>
               }
             />
             <MetricRow
-              label="IS / OOS Sharpe (R)"
+              label="IS / OOS Sharpe"
               value={
                 <span style={{ display: 'flex', gap: 6 }}>
-                  {sharpeChip(opt.classical.is_sharpe)}
+                  {sharpeChip(opt.ema.is_sharpe)}
                   <span style={{ color: 'var(--text-muted)' }}>/</span>
-                  {sharpeChip(opt.classical.oos_sharpe)}
+                  {sharpeChip(opt.ema.oos_sharpe)}
                 </span>
               }
             />
             <MetricRow
               label="vs default OOS"
-              value={sharpeChip(opt.classical.default_oos_sharpe)}
+              value={sharpeChip(opt.ema.default_oos_sharpe)}
             />
             <MetricRow
               label="Combos tested"
-              value={<span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{opt.classical.combos_tested.toLocaleString()}</span>}
+              value={<span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{opt.ema.combos_tested.toLocaleString()}</span>}
             />
             <div style={{ paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Confidence</span>
-              {confidenceBadge(opt.classical.confidence)}
+              {confidenceBadge(opt.ema.confidence)}
             </div>
           </CardSection>
 
@@ -712,6 +729,30 @@ export default function SniperLab() {
               }}>
                 {sig.vol_regime}
               </span>
+            </div>
+          )}
+
+          {/* Track This Signal — only shown for directional signals */}
+          {sig.action && sig.action !== 'HOLD' && (
+            <div style={{ paddingTop: 14, borderTop: '1px solid var(--border)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-sm"
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={handleTrackSignal}
+                disabled={trackingSignal}
+              >
+                {trackingSignal ? <Loader2 size={13} className="icon-spin" /> : <Target size={13} />}
+                Track This Signal
+              </button>
+              {trackResult && (
+                <span style={{ fontSize: '0.83rem', color: '#059669' }}>
+                  Tracking {trackResult.ticker} —{' '}
+                  <a href="/tp-tracker" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>View in TP Tracker</a>
+                </span>
+              )}
+              {trackErr && (
+                <span style={{ fontSize: '0.83rem', color: '#dc2626' }}>{trackErr}</span>
+              )}
             </div>
           )}
         </CardSection>

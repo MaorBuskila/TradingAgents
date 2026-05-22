@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import { Star } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
@@ -18,6 +19,7 @@ type Row = {
 }
 
 export default function Watchlist() {
+  const log = useTabLogger('Watchlist')
   const [categories, setCategories] = useState<Cat[]>([])
   const [rows, setRows] = useState<Row[]>([])
   const [category, setCategory] = useState<string>('')
@@ -74,7 +76,9 @@ export default function Watchlist() {
 
   const addCustom = async (e: React.FormEvent) => {
     e.preventDefault()
+    log('action:add-ticker', { ticker: newItem.ticker })
     try {
+      log('api:start', { endpoint: 'catalog/items' })
       await axios.post(`${API_BASE}/catalog/items`, {
         ticker: newItem.ticker,
         name: newItem.name,
@@ -82,13 +86,13 @@ export default function Watchlist() {
         asset_type: newItem.asset_type,
       })
       setNewItem((prev) => ({ ...prev, ticker: '', name: '' }))
+      log('api:success')
       loadCategories()
       loadItems()
     } catch (err: unknown) {
+      log('api:error', err)
       if (axios.isAxiosError(err) && err.response?.status === 409) {
         alert('That ticker is already in the catalog.')
-      } else {
-        console.error(err)
       }
     }
   }

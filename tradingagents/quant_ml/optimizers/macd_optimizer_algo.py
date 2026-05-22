@@ -286,7 +286,7 @@ def _plateau_score(
 def run_algo_optimizer(
     symbol: Annotated[str, "ticker symbol, e.g. AAPL"],
     curr_date: Annotated[str, "current date YYYY-MM-DD"],
-    is_days: Annotated[int, "in-sample window length in trading periods"] = 180,
+    is_days: Annotated[int, "in-sample window length in trading periods"] = 252,
     oos_days: Annotated[int, "out-of-sample window length in trading periods"] = 90,
     freq: Annotated[str, "'D' for daily (default) or 'W' for weekly bars"] = "D",
     transaction_cost: Annotated[float, "round-trip cost fraction per trade (default 0.001 = 0.1%)"] = 0.001,
@@ -349,10 +349,11 @@ def run_algo_optimizer(
     log.debug("[optimizer] windows — is_start=%d  oos_start=%d  oos_end=%d",
               is_start, oos_start, total_days)
 
-    # Grid
-    fast_periods   = list(range(6, 17))       # 6–16, step 1
-    slow_periods   = list(range(18, 35, 2))   # 18–34, step 2
-    signal_periods = list(range(5, 14))       # 5–13, step 1
+    # Tighter grid — reduces multiple-comparison overfitting (~90 combos vs ~891)
+    fast_periods   = list(range(6, 15, 2))    # 6,8,10,12,14      → 5 values
+    slow_periods   = list(range(20, 31, 2))   # 20,22,24,26,28,30 → 6 values
+    signal_periods = list(range(7, 12, 2))    # 7,9,11            → 3 values
+    # All fast < slow by construction (max fast 14 < min slow 20)
 
     best_is_sharpe  = -np.inf
     best_plateau    = -np.inf
@@ -456,8 +457,14 @@ def run_algo_optimizer(
               default_is_sharpe, default_oos_sharpe)
 
     # ── Confidence ───────────────────────────────────────────────────────────
-    if oos_trade_count < 30:
-        # Insufficient sample — statistical significance too low
+    # No combo cleared a positive IS Sharpe → crossover strategy doesn't fit
+    # this ticker/regime.  Report LOW immediately; OOS number is meaningless.
+    all_is_sharpes = [r["is_sharpe"] for r in param_sharpes]
+    no_valid_signal = not any(s > 0.0 for s in all_is_sharpes)
+
+    if no_valid_signal:
+        confidence = "LOW"
+    elif oos_trade_count < 30:
         confidence = "LOW"
     elif best_is_sharpe > 0 and best_oos_sharpe > 0:
         ratio = best_oos_sharpe / best_is_sharpe
@@ -503,6 +510,7 @@ def run_algo_optimizer(
         "oos_calmar":          round(best_oos_m["calmar"], 4),
         "oos_trade_count":     oos_trade_count,
         "confidence":          confidence,
+        "no_valid_signal":     bool(no_valid_signal),
         "combos_tested":       combos_tested,
         "is_days":             is_days,
         "oos_days":            oos_days,
@@ -510,10 +518,7 @@ def run_algo_optimizer(
         "transaction_cost":    transaction_cost,
         "default_is_sharpe":   round(default_is_sharpe, 4),
         "default_oos_sharpe":  round(default_oos_sharpe, 4),
-        # Top-20 combos by IS Sharpe for UI chart
         "param_sharpes": sorted(param_sharpes, key=lambda x: x["is_sharpe"], reverse=True)[:20],
-        # WFO significance analysis
         "wfo_analysis": wfo.to_dict(),
-        # Debug log lines captured during this run — displayed in UI debug panel
         "debug_logs": debug_logs,
     }

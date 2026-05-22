@@ -41,6 +41,7 @@ from sklearn.preprocessing import StandardScaler
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 from tradingagents.quant_ml.indicators.stockstats_utils import yf_retry
+from tradingagents.quant_ml.indicators.adx_di import compute_adx_di
 from tradingagents.dataflows.rsi_dt_cache import (
     get_rsi_dt_params,
     upsert_rsi_dt_params,
@@ -135,6 +136,19 @@ def _build_features(df: pd.DataFrame, rsi_period: int) -> pd.DataFrame:
         "high": h,
         "low": lo,
     })
+
+
+def _build_features_extended(df: pd.DataFrame, rsi_period: int) -> pd.DataFrame:
+    """_build_features() plus volume_ratio and adx_14 for experiment rule sets."""
+    base = _build_features(df, rsi_period)
+    vol = df["Volume"].squeeze()
+    volume_ratio = vol / vol.rolling(20).mean()
+    adx_series = compute_adx_di(df, length=14)["adx"]
+    adx_series.index = base.index
+    volume_ratio.index = base.index
+    base["volume_ratio"] = volume_ratio.values
+    base["adx_14"] = adx_series.values
+    return base
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -262,9 +276,11 @@ def _run_wfo(
     labels: pd.Series,
     is_days: int,
     oos_days: int,
+    feature_cols: list[str] | None = None,
 ) -> dict:
     """Walk-forward for Model A (sliding) + Model B (fixed crash window)."""
-    X = feat_df[ML_COLS].to_numpy(dtype=float)
+    cols = feature_cols if feature_cols is not None else ML_COLS
+    X = feat_df[cols].to_numpy(dtype=float)
     y = labels.to_numpy(dtype=float)
     n = len(X)
 
@@ -477,11 +493,10 @@ def run_rsi_dt_optimizer(
             wfo["oos_preds_a"], threshold_a,
             wfo["oos_labels"], wfo["oos_returns"],
         )
-        agreement = (
-            (wfo["oos_preds_a"] > threshold_a) &
-            (wfo["oos_preds_b"] > threshold_b)
-        )
-        agreement_rate = float(agreement.mean()) if len(agreement) else 0.0
+        a_fires = wfo["oos_preds_a"] > threshold_a
+        b_fires = wfo["oos_preds_b"] > threshold_b
+        either  = a_fires | b_fires
+        agreement_rate = float((a_fires & b_fires)[either].mean()) if either.any() else 0.0
         avg_oos_acc = float(np.mean([s["oos_acc"] for s in wfo["slides"]])) if wfo["slides"] else 0.0
         n_slides = len(wfo["slides"])
         slides_out = wfo["slides"]

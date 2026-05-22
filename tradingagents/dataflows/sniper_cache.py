@@ -1,7 +1,10 @@
 """
 sniper_cache.py
 ---------------
-SQLite cache for Precision Sniper classical WFO params + DT thresholds.
+SQLite cache for Precision Sniper DT ensemble thresholds and performance metrics.
+
+EMA stack params (fast/slow/trend) are now stored in ema_cache.db via ema_cache.py.
+This table only holds the DT-layer outputs produced by sniper_dt_optimizer.
 
 DB: data/sniper_cache.db
 Table: sniper_params_cache
@@ -34,31 +37,46 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
+_CURRENT_COLUMNS = {
+    "ticker", "threshold_a", "threshold_b",
+    "dt_oos_sharpe", "dt_oos_hit_rate",
+    "training_days", "test_days", "optimized_at",
+}
+
+_CREATE_DDL = """
+    CREATE TABLE IF NOT EXISTS sniper_params_cache (
+        ticker          TEXT PRIMARY KEY,
+        threshold_a     REAL,
+        threshold_b     REAL,
+        dt_oos_sharpe   REAL,
+        dt_oos_hit_rate REAL,
+        training_days   INTEGER,
+        test_days       INTEGER,
+        optimized_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+"""
+
+
 def _ensure_table() -> None:
     conn = _get_conn()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS sniper_params_cache (
-            ticker              TEXT PRIMARY KEY,
-            optimal_ema_fast    INTEGER NOT NULL,
-            optimal_ema_slow      INTEGER NOT NULL,
-            optimal_ema_trend     INTEGER NOT NULL,
-            optimal_min_score     REAL    NOT NULL,
-            optimal_sl_mult       REAL    NOT NULL,
-            optimal_vol_mult      REAL    NOT NULL,
-            classical_is_sharpe   REAL    NOT NULL,
-            classical_oos_sharpe REAL   NOT NULL,
-            confidence            TEXT    NOT NULL,
-            threshold_a           REAL,
-            threshold_b           REAL,
-            dt_oos_sharpe         REAL,
-            dt_oos_hit_rate       REAL,
-            training_days         INTEGER,
-            test_days             INTEGER,
-            optimizer_provider    TEXT,
-            optimized_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    conn.execute(_CREATE_DDL)
     conn.commit()
+
+    # Migrate: if the table has legacy EMA columns (moved to ema_cache.db),
+    # recreate it with only the current schema to avoid NOT NULL violations.
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(sniper_params_cache)")}
+    if not cols.issubset(_CURRENT_COLUMNS):
+        conn.execute("ALTER TABLE sniper_params_cache RENAME TO sniper_params_cache_old")
+        conn.execute(_CREATE_DDL.replace("IF NOT EXISTS ", ""))
+        shared = cols & _CURRENT_COLUMNS - {"optimized_at"}
+        col_list = ", ".join(shared)
+        conn.execute(f"""
+            INSERT INTO sniper_params_cache ({col_list})
+            SELECT {col_list} FROM sniper_params_cache_old
+        """)
+        conn.execute("DROP TABLE sniper_params_cache_old")
+        conn.commit()
+
     conn.close()
 
 
@@ -66,6 +84,7 @@ _ensure_table()
 
 
 def get_sniper_params(ticker: str) -> Optional[Dict[str, Any]]:
+    """Return cached DT params for ticker, or None if not found."""
     conn = _get_conn()
     row = conn.execute(
         "SELECT * FROM sniper_params_cache WHERE ticker = ?",
@@ -77,63 +96,41 @@ def get_sniper_params(ticker: str) -> Optional[Dict[str, Any]]:
 
 def upsert_sniper_params(
     ticker: str,
-    optimal_ema_fast: int,
-    optimal_ema_slow: int,
-    optimal_ema_trend: int,
-    optimal_min_score: float,
-    optimal_sl_mult: float,
-    optimal_vol_mult: float,
-    classical_is_sharpe: float,
-    classical_oos_sharpe: float,
-    confidence: str,
     threshold_a: float | None = None,
     threshold_b: float | None = None,
     dt_oos_sharpe: float | None = None,
     dt_oos_hit_rate: float | None = None,
-    training_days: int = 180,
-    test_days: int = 90,
-    optimizer_provider: str = "algo",
+    training_days: int = 1000,
+    test_days: int = 20,
 ) -> None:
+    """Insert or replace DT optimization result for a ticker."""
     conn = _get_conn()
     conn.execute("""
         INSERT INTO sniper_params_cache (
-            ticker, optimal_ema_fast, optimal_ema_slow, optimal_ema_trend,
-            optimal_min_score, optimal_sl_mult, optimal_vol_mult,
-            classical_is_sharpe, classical_oos_sharpe, confidence,
-            threshold_a, threshold_b, dt_oos_sharpe, dt_oos_hit_rate,
-            training_days, test_days, optimizer_provider, optimized_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ticker, threshold_a, threshold_b,
+            dt_oos_sharpe, dt_oos_hit_rate,
+            training_days, test_days, optimized_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(ticker) DO UPDATE SET
-            optimal_ema_fast     = excluded.optimal_ema_fast,
-            optimal_ema_slow     = excluded.optimal_ema_slow,
-            optimal_ema_trend    = excluded.optimal_ema_trend,
-            optimal_min_score    = excluded.optimal_min_score,
-            optimal_sl_mult      = excluded.optimal_sl_mult,
-            optimal_vol_mult     = excluded.optimal_vol_mult,
-            classical_is_sharpe  = excluded.classical_is_sharpe,
-            classical_oos_sharpe = excluded.classical_oos_sharpe,
-            confidence           = excluded.confidence,
-            threshold_a          = excluded.threshold_a,
-            threshold_b          = excluded.threshold_b,
-            dt_oos_sharpe        = excluded.dt_oos_sharpe,
-            dt_oos_hit_rate      = excluded.dt_oos_hit_rate,
-            training_days        = excluded.training_days,
-            test_days            = excluded.test_days,
-            optimizer_provider   = excluded.optimizer_provider,
-            optimized_at         = CURRENT_TIMESTAMP
+            threshold_a     = excluded.threshold_a,
+            threshold_b     = excluded.threshold_b,
+            dt_oos_sharpe   = excluded.dt_oos_sharpe,
+            dt_oos_hit_rate = excluded.dt_oos_hit_rate,
+            training_days   = excluded.training_days,
+            test_days       = excluded.test_days,
+            optimized_at    = CURRENT_TIMESTAMP
     """, (
         ticker.upper().strip(),
-        optimal_ema_fast, optimal_ema_slow, optimal_ema_trend,
-        optimal_min_score, optimal_sl_mult, optimal_vol_mult,
-        classical_is_sharpe, classical_oos_sharpe, confidence,
-        threshold_a, threshold_b, dt_oos_sharpe, dt_oos_hit_rate,
-        training_days, test_days, optimizer_provider,
+        threshold_a, threshold_b,
+        dt_oos_sharpe, dt_oos_hit_rate,
+        training_days, test_days,
     ))
     conn.commit()
     conn.close()
 
 
 def list_all_sniper_cached() -> list:
+    """Return all tickers with cached DT params."""
     conn = _get_conn()
     rows = conn.execute(
         "SELECT * FROM sniper_params_cache ORDER BY ticker ASC"
@@ -143,6 +140,7 @@ def list_all_sniper_cached() -> list:
 
 
 def delete_sniper_params(ticker: str) -> bool:
+    """Remove cached params for a ticker. Returns True if a row was deleted."""
     conn = _get_conn()
     cur = conn.execute(
         "DELETE FROM sniper_params_cache WHERE ticker = ?",

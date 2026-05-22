@@ -557,3 +557,89 @@ class RedditTrendingTickerOut(BaseModel):
     mentions: int
     posts: List[RedditTrendingPost] = []
 
+
+# ── RSI DT Feature Lab ────────────────────────────────────────────────────────
+
+class RsiDtFeatureLabRequest(BaseModel):
+    symbol: str
+    date: str
+    rule_sets: List[str] = ["BASE", "VOLUME", "TREND", "FULL"]
+    custom_features: Optional[List[str]] = None
+    custom_vetos: Optional[List[str]] = None
+    is_days: int = 1000
+    oos_days: int = 20
+    label_horizon: int = 10
+    tp_mult: float = 2.0
+    sl_mult: float = 1.0
+    rsi_period: int = 14
+
+
+class RsiDtFeatureLabResultRow(BaseModel):
+    run_id: str
+    symbol: str
+    date: str
+    rule_set_name: str
+    features_used: List[str]
+    veto_rules: List[str]
+    oos_sharpe: float
+    hit_rate: float
+    trade_count: int
+    confidence: str
+    n_slides: int
+    avg_oos_acc: float
+    ran_at: str
+
+
+class RsiDtFeatureLabResponse(BaseModel):
+    run_id: str
+    symbol: str
+    date: str
+    results: List[RsiDtFeatureLabResultRow]
+    winner: Optional[str] = None
+    ran_at: str
+
+
+# ── Sniper Lab ────────────────────────────────────────────────────────────────
+
+class SniperOptimizeRequest(BaseModel):
+    symbol: str
+    date: str
+    is_days: int = 180
+    oos_days: int = 90
+    dt_is_days: int = 1000
+    dt_oos_days: int = 20
+
+
+class SniperEmaResult(BaseModel):
+    optimal_fast: int
+    optimal_slow: int
+    optimal_trend: int
+    is_sharpe: float
+    oos_sharpe: float
+    confidence: str
+    combos_tested: int
+    default_oos_sharpe: float
+
+
+class SniperDtResult(BaseModel):
+    last_signal: int
+    last_prob_a: float
+    last_prob_b: float
+    threshold_a: float
+    threshold_b: float
+    oos_sharpe: float
+    oos_hit_rate: float
+    bull_score_today: float
+    grade_veto_ok: bool
+    confidence: str
+
+
+class SniperOptimizeResponse(BaseModel):
+    symbol: str
+    date: str
+    ema: SniperEmaResult
+    dt: SniperDtResult
+    rsi: Optional[dict] = None
+    macd: Optional[dict] = None
+    summary: str = ""
+

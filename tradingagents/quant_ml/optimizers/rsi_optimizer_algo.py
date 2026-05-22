@@ -197,20 +197,48 @@ def _calc_sharpe(closes: pd.Series, positions: pd.Series) -> float:
 # STEP 5 — Walk-Forward Optimization (the full grid search + OOS validation)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _plateau_score_rsi(
+    all_combos: list[dict],
+    period: int,
+    upper: float,
+    lower: float,
+) -> float:
+    """Average IS Sharpe of (period, upper, lower) and its immediate neighbours.
+
+    Neighbourhood: period ±2, upper ±5, lower ±5.  A high plateau score means
+    the parameter region is stable — not a single noise spike.
+    """
+    lookup = {
+        (r["period"], r["upper"], r["lower"]): r["is_sharpe"]
+        for r in all_combos
+    }
+    values = []
+    for dp in (-2, 0, 2):
+        for du in (-5, 0, 5):
+            for dl in (-5, 0, 5):
+                key = (period + dp, upper + du, lower + dl)
+                if key in lookup:
+                    values.append(lookup[key])
+    return float(np.mean(values)) if values else 0.0
+
+
 def run_algo_optimizer(
     symbol: Annotated[str, "ticker symbol, e.g. AAPL"],
     curr_date: Annotated[str, "current date YYYY-MM-DD"],
-    is_days: Annotated[int, "in-sample window length in trading days"] = 180,
+    is_days: Annotated[int, "in-sample window length in trading days"] = 252,
     oos_days: Annotated[int, "out-of-sample window length in trading days"] = 90,
 ) -> dict:
     """
     Full Walk-Forward RSI Optimization.
 
-    Grid searched:
-      - RSI period:         2 to 28 (step 1)  → 27 values
-      - Overbought threshold: 60 to 85 (step 5) → 6 values
-      - Oversold threshold:   15 to 40 (step 5) → 6 values
-      Total combinations: 27 × 6 × 6 = 972
+    Grid searched (tighter than v1 to reduce overfitting):
+      - RSI period:           5 to 21 (step 2)  →  9 values
+      - Overbought threshold: 65 to 80 (step 5) →  4 values
+      - Oversold threshold:   25 to 40 (step 5) →  4 values
+      Total combinations: 9 × 4 × 4 ≈ 120 (minus invalid upper ≤ lower)
+
+    Winner selected by plateau score (average IS Sharpe of combo + neighbours)
+    rather than the raw IS peak — same approach as the MACD optimizer.
 
     Returns dict with:
       optimal_period, optimal_upper, optimal_lower,
@@ -221,14 +249,12 @@ def run_algo_optimizer(
     # Load data
     data = _load_price_data(symbol)
 
-    # Filter to data up to curr_date (simulate real-time: no future data)
     curr_dt = pd.to_datetime(curr_date)
     data = data[data["Date"] <= curr_dt].copy()
 
     closes = data["Close"].reset_index(drop=True)
     total_days = len(closes)
 
-    # Need enough data for both windows + RSI warmup (28 days max period)
     min_required = is_days + oos_days + 30
     if total_days < min_required:
         raise ValueError(
@@ -236,86 +262,90 @@ def run_algo_optimizer(
             f"Try a smaller is_days or oos_days."
         )
 
-    # ── Split into IS and OOS windows ──────────────────────────────────────
-    # OOS = the MOST RECENT oos_days trading days (unseen data)
-    # IS  = the oos_days before that (training data)
-    #
-    # Example with 270 total days, is=180, oos=90:
-    #   [0 ... 179]  = IS (days 0-179)
-    #   [180 ... 269] = OOS (days 180-269, i.e. last 90 days)
-
     oos_start = total_days - oos_days
     is_start = oos_start - is_days
     if is_start < 0:
         is_start = 0
 
-    # We calculate RSI on the FULL series for accuracy (more history = better RSI warmup)
-    # Then we evaluate only on the IS or OOS slice
+    # ── Tighter grid — reduces multiple-comparison overfitting ────────────
+    periods = list(range(5, 22, 2))   # 5,7,9,11,13,15,17,19,21 → 9 values
+    uppers  = list(range(65, 81, 5))  # 65,70,75,80             → 4 values
+    lowers  = list(range(25, 41, 5))  # 25,30,35,40             → 4 values
 
-    # ── Grid Search ────────────────────────────────────────────────────────
-    periods = list(range(2, 29))        # 2, 3, 4 ... 28
-    uppers  = list(range(60, 90, 5))    # 60, 65, 70, 75, 80, 85
-    lowers  = list(range(15, 45, 5))    # 15, 20, 25, 30, 35, 40
-
-    best_is_sharpe = -np.inf
     best_params = {"period": 14, "upper": 70, "lower": 30}
     combos_tested = 0
-
-    # Track best Sharpe per period (for the bar chart in UI)
-    # key = period, value = {"is_sharpe": best IS sharpe for this period, "oos_sharpe": its OOS sharpe}
+    all_combos: list[dict] = []
     period_best: dict[int, dict] = {}
 
-    # Pre-cache RSI for each period (avoid recomputing for each threshold combo)
     rsi_cache: dict[int, pd.Series] = {}
     for period in periods:
         rsi_cache[period] = _calc_rsi(closes, period)
 
+    is_closes  = closes.iloc[is_start:oos_start]
+    oos_closes = closes.iloc[oos_start:]
+
     for period in periods:
         rsi_full = rsi_cache[period]
-        period_best_sharpe = -np.inf
+        period_best_is = -np.inf
         period_best_oos = 0.0
 
         for upper in uppers:
             for lower in lowers:
                 if upper <= lower:
-                    continue  # invalid: upper must be above lower
+                    continue
 
                 combos_tested += 1
-
-                # Calculate positions on the FULL series
                 positions_full = _generate_positions(rsi_full, upper, lower)
+                is_sharpe = _calc_sharpe(is_closes, positions_full.iloc[is_start:oos_start])
+                oos_pos = positions_full.iloc[oos_start:]
+                oos_trades = int((oos_pos.diff().fillna(0) != 0).sum())
 
-                # Evaluate ONLY on IS slice
-                is_closes    = closes.iloc[is_start:oos_start]
-                is_positions = positions_full.iloc[is_start:oos_start]
-                is_sharpe    = _calc_sharpe(is_closes, is_positions)
+                all_combos.append({
+                    "period": period,
+                    "upper": upper,
+                    "lower": lower,
+                    "is_sharpe": is_sharpe,
+                    "oos_trades": oos_trades,
+                })
 
-                # Track best for this period
-                if is_sharpe > period_best_sharpe:
-                    period_best_sharpe = is_sharpe
-                    # Calculate OOS sharpe for this combo too
-                    oos_closes    = closes.iloc[oos_start:]
-                    oos_positions = positions_full.iloc[oos_start:]
-                    period_best_oos = _calc_sharpe(oos_closes, oos_positions)
-
-                # Track global best
-                if is_sharpe > best_is_sharpe:
-                    best_is_sharpe = is_sharpe
-                    best_params = {"period": period, "upper": upper, "lower": lower}
+                if is_sharpe > period_best_is:
+                    period_best_is = is_sharpe
+                    period_best_oos = _calc_sharpe(oos_closes, oos_pos)
 
         period_best[period] = {
             "period": period,
-            "is_sharpe": round(period_best_sharpe, 4),
+            "is_sharpe": round(period_best_is, 4),
             "oos_sharpe": round(period_best_oos, 4),
         }
 
-    # ── Validate best params on OOS (unseen data) ──────────────────────────
-    best_rsi  = rsi_cache[best_params["period"]]
-    best_pos  = _generate_positions(best_rsi, best_params["upper"], best_params["lower"])
+    # ── Plateau-based winner selection — prefer combos with ≥ 5 OOS trades ──
+    # Build ranked list: top-quartile IS, sorted by plateau score descending.
+    # Pick the first candidate that fires at least MIN_OOS_TRADES in OOS.
+    # If none qualify (very rare), fall back to the top-plateau combo.
+    MIN_OOS_TRADES = 5
+    if all_combos:
+        top_quartile = float(np.percentile([r["is_sharpe"] for r in all_combos], 75))
+        candidates = [
+            r for r in all_combos if r["is_sharpe"] >= top_quartile
+        ]
+        for row in candidates:
+            row["_plateau"] = _plateau_score_rsi(all_combos, row["period"], row["upper"], row["lower"])
+        candidates.sort(key=lambda r: (r["_plateau"], r["is_sharpe"]), reverse=True)
 
-    oos_closes    = closes.iloc[oos_start:]
-    oos_positions = best_pos.iloc[oos_start:]
-    best_oos_sharpe = _calc_sharpe(oos_closes, oos_positions)
+        best_params = candidates[0]  # fallback — top plateau regardless of trades
+        for row in candidates:
+            if row["oos_trades"] >= MIN_OOS_TRADES:
+                best_params = row
+                break
+        best_params = {"period": best_params["period"], "upper": best_params["upper"], "lower": best_params["lower"]}
+    best_is_sharpe = -np.inf
+
+    # ── Validate best params on OOS (true holdout — not seen during selection)
+    best_rsi = rsi_cache[best_params["period"]]
+    best_pos = _generate_positions(best_rsi, best_params["upper"], best_params["lower"])
+    best_oos_sharpe = _calc_sharpe(oos_closes, best_pos.iloc[oos_start:])
+    best_is_sharpe  = _calc_sharpe(is_closes,  best_pos.iloc[is_start:oos_start])
+    best_oos_trades = int((best_pos.iloc[oos_start:].diff().fillna(0) != 0).sum())
 
     # ── Baseline: RSI(14) with 70/30 (industry default) ───────────────────
     default_rsi = rsi_cache.get(14, _calc_rsi(closes, 14))
@@ -323,10 +353,10 @@ def run_algo_optimizer(
     default_is_sharpe  = _calc_sharpe(closes.iloc[is_start:oos_start], default_pos.iloc[is_start:oos_start])
     default_oos_sharpe = _calc_sharpe(closes.iloc[oos_start:], default_pos.iloc[oos_start:])
 
-    # ── Confidence Score ───────────────────────────────────────────────────
-    # How much does OOS performance hold up vs IS performance?
-    # ratio close to 1.0 = great. ratio < 0.2 = likely overfit.
-    if best_is_sharpe > 0 and best_oos_sharpe > 0:
+    # ── Confidence ─────────────────────────────────────────────────────────
+    if best_oos_trades < MIN_OOS_TRADES:
+        confidence = "LOW"
+    elif best_is_sharpe > 0 and best_oos_sharpe > 0:
         ratio = best_oos_sharpe / best_is_sharpe
         if best_oos_sharpe >= 0.5 and ratio >= 0.4:
             confidence = "HIGH"
@@ -340,21 +370,17 @@ def run_algo_optimizer(
         confidence = "LOW"
 
     return {
-        # Best parameters found
         "optimal_period": best_params["period"],
         "optimal_upper":  best_params["upper"],
         "optimal_lower":  best_params["lower"],
-        # Performance
-        "is_sharpe":   round(best_is_sharpe, 4),
-        "oos_sharpe":  round(best_oos_sharpe, 4),
-        "confidence":  confidence,
-        # Meta
+        "is_sharpe":        round(best_is_sharpe, 4),
+        "oos_sharpe":       round(best_oos_sharpe, 4),
+        "oos_trade_count":  best_oos_trades,
+        "confidence":       confidence,
         "combos_tested":      combos_tested,
         "is_days":            is_days,
         "oos_days":           oos_days,
-        # Baseline comparison
         "default_is_sharpe":  round(default_is_sharpe, 4),
         "default_oos_sharpe": round(default_oos_sharpe, 4),
-        # Chart data: one entry per period showing best Sharpe for that period
         "period_sharpes": sorted(period_best.values(), key=lambda x: x["period"]),
     }

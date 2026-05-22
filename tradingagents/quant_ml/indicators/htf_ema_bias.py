@@ -43,10 +43,10 @@ def compute_htf_ema_bias(
     htf_ema_fast = htf_close.ewm(span=fast, adjust=False).mean()
     htf_ema_slow = htf_close.ewm(span=slow, adjust=False).mean()
     htf_bias = (htf_ema_fast > htf_ema_slow).shift(1)
-    htf_bias = htf_bias.fillna(False).astype(bool)
+    htf_bias = htf_bias.infer_objects(copy=False).fillna(False).astype(bool)
 
     mapped = htf_bias.reindex(df["Date"], method="ffill")
-    mapped = mapped.fillna(False).astype(bool).reset_index(drop=True)
+    mapped = mapped.infer_objects(copy=False).fillna(False).astype(bool).reset_index(drop=True)
     mapped.index = daily_df.index
     mapped.name = "htf_bias"
     return mapped.astype(bool)

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
+import { useTabLogger } from '../hooks/useTabLogger'
 import { RefreshCw, SlidersHorizontal, ChevronDown, ChevronRight } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer } from 'recharts'
 import PositionDrawer from './PositionDrawer'
@@ -62,6 +63,7 @@ interface PendingBuyItem {
 }
 
 export default function PortfolioPage() {
+  const log = useTabLogger('Portfolio')
   const [positions, setPositions] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [newPos, setNewPos] = useState({ ticker: '', quantity: '', cost_basis: '', category: '' })
@@ -142,7 +144,7 @@ export default function PortfolioPage() {
       const res = await axios.get(`${API_BASE}/portfolio/positions`)
       setPositions(res.data)
     } catch (err) {
-      console.error(err)
+      log('api:error', err)
     }
   }
 
@@ -151,7 +153,7 @@ export default function PortfolioPage() {
       const res = await axios.get<PendingBuyItem[]>(`${API_BASE}/catalog/marks`)
       setPendingBuys(res.data)
     } catch (err) {
-      console.error(err)
+      log('api:error', err)
     }
   }
 
@@ -194,7 +196,9 @@ export default function PortfolioPage() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
+    log('action:add-position', { ticker: newPos.ticker })
     try {
+      log('api:start', { endpoint: 'portfolio/positions' })
       await axios.post(`${API_BASE}/portfolio/positions`, {
         ticker: newPos.ticker,
         quantity: parseFloat(newPos.quantity),
@@ -202,9 +206,10 @@ export default function PortfolioPage() {
         category: newPos.category.trim() || undefined,
       })
       setNewPos({ ticker: '', quantity: '', cost_basis: '', category: '' })
+      log('api:success')
       fetchPositions()
     } catch (err) {
-      console.error(err)
+      log('api:error', err)
     }
   }
 
@@ -213,7 +218,7 @@ export default function PortfolioPage() {
       await axios.delete(`${API_BASE}/portfolio/positions/${id}`)
       fetchPositions()
     } catch (err) {
-      console.error(err)
+      log('api:error', err)
     }
   }
 
@@ -223,7 +228,7 @@ export default function PortfolioPage() {
       await axios.post(`${API_BASE}/portfolio/refresh-prices`)
       await fetchPositions()
     } catch (err) {
-      console.error(err)
+      log('api:error', err)
     } finally {
       setLoading(false)
     }

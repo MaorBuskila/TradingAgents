@@ -22,6 +22,7 @@ import yfinance as yf
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
+from tradingagents.dataflows.ema_cache import get_ema_params
 from tradingagents.dataflows.macd_cache import get_macd_params
 from tradingagents.dataflows.rsi_cache import get_rsi_params
 from tradingagents.dataflows.sniper_cache import get_sniper_params
@@ -44,9 +45,12 @@ log = logging.getLogger("sniper_dt_optimizer")
 
 FETCH_YEARS = 8
 WARMUP_BARS = 210
-MIN_USABLE_BARS = 1400
+MIN_USABLE_BARS = 500   # absolute floor; 1400+ is preferred but new tickers are auto-scaled
+MIN_IS_DAYS = 252       # 1 year minimum training window
+MIN_OOS_DAYS = 30       # 6 weeks minimum holdout
+MIN_LABEL_HORIZON = 10  # 2 weeks minimum trade horizon
 CACHE_TTL_DAYS = 7
-MODEL_B_TRAIN_BARS = 1500
+MODEL_B_TRAIN_BARS = 1000
 THRESHOLD_GRID = [0.50, 0.55, 0.60, 0.65]
 
 # 19-feature set — 14 original + 5 new (marked NEW):
@@ -114,7 +118,11 @@ def _build_ml_features(raw: pd.DataFrame, symbol: str = "") -> pd.DataFrame:
       bear_score       — continuous 0-10 sniper bear confluence score
     """
     base = build_sniper_base_indicators(raw)
-    d = finalize_sniper_frame(base, fast=9, slow=21, trend=55, vol_mult=1.2)
+    ema = get_ema_params(symbol) if symbol else None
+    ema_fast  = int(ema["optimal_fast"])  if ema and ema.get("optimal_fast")  else 9
+    ema_slow  = int(ema["optimal_slow"])  if ema and ema.get("optimal_slow")  else 21
+    ema_trend = int(ema["optimal_trend"]) if ema and ema.get("optimal_trend") else 55
+    d = finalize_sniper_frame(base, fast=ema_fast, slow=ema_slow, trend=ema_trend, vol_mult=1.2)
     close = d["Close"].astype(float)
 
     # ── original 14 features ──────────────────────────────────────────────────
@@ -228,7 +236,10 @@ def _oos_dual(
 
 
 def _confidence_tier(oos_sharpe: float, agreement_rate: float) -> str:
-    if oos_sharpe > 1.0 and agreement_rate >= 0.60:
+    # When OOS Sharpe is exceptional (> 5.0) the agreement bar drops to 0.50 —
+    # a rare-signal ensemble with 11+ Sharpe shouldn't be penalised by tie-breaking.
+    agreement_floor = 0.50 if oos_sharpe > 5.0 else 0.60
+    if oos_sharpe > 1.0 and agreement_rate >= agreement_floor:
         return "HIGH"
     if oos_sharpe > 0.5:
         return "MEDIUM"
@@ -317,13 +328,37 @@ def _run_wfo(
     }
 
 
+def _scale_windows(
+    n_usable: int,
+    is_days: int,
+    oos_days: int,
+    label_horizon: int,
+) -> tuple[int, int, int, bool]:
+    """Proportionally shrink IS/OOS/horizon when a ticker has limited history.
+
+    Returns (is_days, oos_days, label_horizon, data_limited).
+    data_limited=True signals that defaults were overridden due to short history.
+    """
+    headroom = n_usable - label_horizon
+    if headroom >= is_days + oos_days:
+        return is_days, oos_days, label_horizon, False
+
+    # Scale horizon first (smallest component)
+    horizon = max(MIN_LABEL_HORIZON, min(label_horizon, n_usable // 20))
+    headroom = n_usable - horizon
+    # Give ~83% to IS, ~17% to OOS; enforce per-component minimums
+    oos = max(MIN_OOS_DAYS, min(oos_days, headroom // 6))
+    is_ = max(MIN_IS_DAYS, min(is_days, headroom - oos))
+    return is_, oos, horizon, True
+
+
 def run_sniper_dt_optimizer(
     symbol: str,
     curr_date: str,
     *,
-    is_days: int = 1000,
-    oos_days: int = 20,
-    label_horizon: int = 10,
+    is_days: int = 750,   # ~3 years: captures full trend cycles, avoids stale regimes
+    oos_days: int = 60,   # quarterly OOS — meaningful for weekly-horizon trend trades
+    label_horizon: int = 20,  # ~4-week hold: aligns with weekly trend perspective
     tp_mult: float = 1.5,
     sl_mult: float = 1.0,
     force_reoptimize: bool = False,
@@ -331,8 +366,8 @@ def run_sniper_dt_optimizer(
 ) -> dict:
     log.info("[sniper_dt] WFO for %s @ %s", symbol, curr_date)
 
-    is_days = max(int(is_days), 500)
-    oos_days = max(int(oos_days), 5)
+    is_days = max(int(is_days), MIN_IS_DAYS)
+    oos_days = max(int(oos_days), MIN_OOS_DAYS)
 
     curr_ts = pd.to_datetime(curr_date)
     start_date = (curr_ts - pd.DateOffset(years=FETCH_YEARS)).strftime("%Y-%m-%d")
@@ -355,7 +390,7 @@ def run_sniper_dt_optimizer(
     if len(raw) < MIN_USABLE_BARS:
         raise ValueError(f"Insufficient data for {symbol}: {len(raw)} bars")
 
-    feat_full = _build_ml_features(raw, symbol=symbol).iloc[WARMUP_BARS:].copy()
+    feat_full = _build_ml_features(raw, symbol=symbol.upper().strip()).iloc[WARMUP_BARS:].copy()
     labels_full = _triple_barrier_labels(
         close=feat_full["Close"].squeeze(),
         high=feat_full["High"].squeeze(),
@@ -371,8 +406,23 @@ def run_sniper_dt_optimizer(
     labels = labels_full[mask].astype(int)
     bull_score = feat_df["bull_score"].astype(float)
 
-    if len(feat_df) < is_days + oos_days:
-        raise ValueError(f"Too few labeled bars for {symbol}: {len(feat_df)}")
+    # Auto-scale windows for tickers with limited history
+    is_days, oos_days, label_horizon, data_limited = _scale_windows(
+        len(feat_df), is_days, oos_days, label_horizon
+    )
+    if data_limited:
+        log.warning(
+            "[sniper_dt] %s has limited history (%d bars) — scaled to IS=%d OOS=%d horizon=%d",
+            symbol, len(feat_df), is_days, oos_days, label_horizon,
+        )
+
+    if len(feat_df) < is_days + oos_days + label_horizon:
+        raise ValueError(
+            f"Insufficient data for {symbol}: {len(feat_df)} labeled bars, "
+            f"need at least {is_days + oos_days + label_horizon} "
+            f"(IS={is_days} + OOS={oos_days} + horizon={label_horizon}). "
+            f"Ticker needs at least {MIN_USABLE_BARS + WARMUP_BARS} raw trading days."
+        )
 
     cached = None if force_reoptimize else get_sniper_params(symbol)
     reuse = _cache_is_fresh(cached) and cached is not None
@@ -403,8 +453,13 @@ def run_sniper_dt_optimizer(
         oos_trade_count = int(
             ((pa > threshold_a) & (pb > threshold_b) & gv).sum()
         )
-        agreement = (pa > threshold_a) & (pb > threshold_b)
-        agreement_rate = float(agreement.mean()) if len(agreement) else 0.0
+        # Conditional agreement: of all bars where at least one model fires,
+        # what fraction do both fire?  Unconditional mean is near-zero because
+        # signals are rare by design and rewards false LOWs.
+        a_fires = pa > threshold_a
+        b_fires = pb > threshold_b
+        either = a_fires | b_fires
+        agreement_rate = float((a_fires & b_fires)[either].mean()) if either.any() else 0.0
         avg_oos_acc = float(np.mean([s["oos_acc"] for s in wfo["slides"]])) if wfo["slides"] else 0.0
         n_slides = len(wfo["slides"])
         slides_out = wfo["slides"]
@@ -475,4 +530,5 @@ def run_sniper_dt_optimizer(
         "cache_hit": bool(reuse),
         "tp_mult": float(tp_mult),
         "sl_mult": float(sl_mult),
+        "data_limited": bool(data_limited),
     }

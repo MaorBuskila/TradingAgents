@@ -112,6 +112,90 @@ def init_db():
             optimized_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # TP/Trail target tracker — one row per open trade, updated as TP levels are hit.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS position_targets (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker       TEXT    NOT NULL,
+            side         TEXT    NOT NULL,
+            entry        REAL    NOT NULL,
+            sl           REAL    NOT NULL,
+            trail_sl     REAL    NOT NULL,
+            tp1          REAL    NOT NULL,
+            tp2          REAL    NOT NULL,
+            tp3          REAL    NOT NULL,
+            tp1_hit      INTEGER NOT NULL DEFAULT 0,
+            tp2_hit      INTEGER NOT NULL DEFAULT 0,
+            tp3_hit      INTEGER NOT NULL DEFAULT 0,
+            trail_active INTEGER NOT NULL DEFAULT 0,
+            closed       INTEGER NOT NULL DEFAULT 0,
+            exit_reason  TEXT,
+            rsi_at_entry REAL,
+            htf_bias     REAL,
+            vol_regime   TEXT,
+            bull_score   REAL,
+            as_of_date   TEXT,
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ptargets_ticker ON position_targets(ticker, closed)"
+    )
+    for col, definition in [
+        ("trail_sl",     "REAL    NOT NULL DEFAULT 0"),
+        ("trail_active", "INTEGER NOT NULL DEFAULT 0"),
+        ("closed",       "INTEGER NOT NULL DEFAULT 0"),
+        ("exit_reason",  "TEXT"),
+        ("rsi_at_entry", "REAL"),
+        ("htf_bias",     "REAL"),
+        ("vol_regime",   "TEXT"),
+        ("bull_score",   "REAL"),
+        ("as_of_date",   "TEXT"),
+        ("updated_at",   "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE position_targets ADD COLUMN {col} {definition}")
+        except Exception:
+            pass
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fundamentals_cache (
+            ticker      TEXT PRIMARY KEY,
+            ratios_json TEXT,
+            income_json TEXT,
+            balance_json TEXT,
+            cashflow_json TEXT,
+            analyst_json TEXT,
+            cached_at   TEXT,
+            updated_at  TEXT
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS earnings_calendar_cache (
+            ticker              TEXT PRIMARY KEY,
+            next_earnings_date  TEXT,
+            earnings_time       TEXT,
+            eps_estimate        REAL,
+            revenue_estimate    REAL,
+            history_json        TEXT,
+            cached_at           TEXT
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sec_filings_cache (
+            accession_number TEXT PRIMARY KEY,
+            ticker           TEXT,
+            cik              TEXT,
+            form_type        TEXT,
+            filing_date      TEXT,
+            filing_url       TEXT,
+            llm_summary      TEXT,
+            summarized_at    TEXT
+        )
+    ''')
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sec_filings_ticker ON sec_filings_cache(ticker)"
+    )
     conn.commit()
     conn.close()
     seed_catalog_if_needed()

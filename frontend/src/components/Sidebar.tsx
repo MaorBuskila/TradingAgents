@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   PlayCircle, FileText, PieChart, ListOrdered,
-  Video, FlaskConical, Activity, Crosshair,
+  Video, FlaskConical, Activity, Crosshair, Target, BarChart2,
   Sun, Moon, Monitor,
   type LucideIcon,
 } from 'lucide-react'
@@ -31,11 +31,18 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Fundamentals',
+    items: [
+      { to: '/fundamentals-lab', label: 'Fundamentals Lab', sub: 'Earnings · SEC filings · LLM analysis', icon: BarChart2 },
+    ],
+  },
+  {
     label: 'Quant Labs',
     items: [
       { to: '/rsi-lab',    label: 'RSI Lab',    sub: 'Walk-forward RSI optimizer', icon: FlaskConical },
       { to: '/macd-lab',   label: 'MACD Lab',   sub: 'Walk-forward MACD optimizer', icon: Activity },
-      { to: '/sniper-lab', label: 'Sniper Lab', sub: 'EMA + DT precision entries',  icon: Crosshair },
+      { to: '/sniper-lab', label: 'Sniper Lab',  sub: 'EMA + DT precision entries',   icon: Crosshair },
+      { to: '/tp-tracker', label: 'TP Tracker', sub: 'Track sniper trade targets',   icon: Target },
     ],
   },
 ]
