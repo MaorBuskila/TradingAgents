@@ -105,7 +105,9 @@ cleanup() {
   echo ""
   echo "Shutting down services..."
   _BOT_STOP=1
-  kill "${BACKEND_PID:-}" "${FRONTEND_PID:-}" "${BOT_PID:-}" "${BOT_WATCHDOG_PID:-}" 2>/dev/null || true
+  kill "${BACKEND_PID:-}" "${FRONTEND_PID:-}" "${BOT_WATCHDOG_PID:-}" 2>/dev/null || true
+  # BOT_PID lives in the watchdog subshell — kill by name to be sure
+  pkill -f "python.*telegram_bot" 2>/dev/null || true
   exit
 }
 trap cleanup SIGINT SIGTERM
