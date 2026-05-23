@@ -19,8 +19,14 @@ sudo apt-get update -qq
 sudo apt-get install -y -qq \
   python3-pip python3-venv python3-dev \
   build-essential git curl \
-  sqlite3 libsqlite3-dev \
-  nodejs npm
+  sqlite3 libsqlite3-dev
+# nodejs/npm: install via nodesource only if not already present
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  sudo apt-get install -y -qq nodejs
+else
+  echo "  node $(node --version) / npm $(npm --version) already present — skipping nodesource"
+fi
 
 # ── Python venv ────────────────────────────────────────────────────────────────
 echo "[2/6] Setting up Python virtual environment..."
@@ -92,13 +98,14 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
+# ── OS firewall: allow port 8000 (must be BEFORE the REJECT rule) ─────────────
+sudo iptables -D INPUT -p tcp -m state --state NEW -m tcp --dport 8000 -j ACCEPT 2>/dev/null || true
+sudo iptables -I INPUT 5 -p tcp -m state --state NEW -m tcp --dport 8000 -j ACCEPT 2>/dev/null || true
+
 # ── Enable & start services ────────────────────────────────────────────────────
 sudo systemctl daemon-reload
 sudo systemctl enable tradingagents-api tradingagents-bot
 sudo systemctl start tradingagents-api tradingagents-bot
-
-# ── OS firewall: allow port 8000 ──────────────────────────────────────────────
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT 2>/dev/null || true
 # Persist iptables rules across reboots
 if command -v netfilter-persistent &>/dev/null; then
   sudo netfilter-persistent save
