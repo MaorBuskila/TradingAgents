@@ -29,15 +29,6 @@ if ! "$PY" -c "import uvicorn" 2>/dev/null; then
   exit 1
 fi
 
-cleanup() {
-  echo ""
-  echo "Shutting down services..."
-  kill "${BACKEND_PID:-}" "${FRONTEND_PID:-}" 2>/dev/null || true
-  exit
-}
-
-trap cleanup SIGINT SIGTERM
-
 # Fail fast: catch TypeScript/build errors before starting services
 echo "Checking frontend for build errors..."
 if ! (cd "$ROOT/frontend" && npm run build -- --mode development 2>&1); then
@@ -49,6 +40,12 @@ echo "Frontend OK."
 echo ""
 
 echo "Starting FastAPI backend on http://127.0.0.1:8000 ..."
+# Kill any stale process holding port 8000 before starting
+if lsof -ti tcp:8000 >/dev/null 2>&1; then
+  echo "Port 8000 in use — killing stale process..."
+  lsof -ti tcp:8000 | xargs kill -9 2>/dev/null || true
+  sleep 0.5
+fi
 "$PY" -m uvicorn api.main:app --host 127.0.0.1 --port 8000 &
 BACKEND_PID=$!
 
@@ -70,11 +67,42 @@ echo "Starting Vite frontend (proxies /api -> backend) ..."
 (cd "$ROOT/frontend" && npm run dev 2>&1) &
 FRONTEND_PID=$!
 
+# Start Telegram bot with auto-restart if token is configured
+BOT_PID=""
+_BOT_STOP=0
+if grep -q "^TELEGRAM_BOT_TOKEN=.\+" "$ROOT/.env" 2>/dev/null; then
+  _bot_watchdog() {
+    while [[ "$_BOT_STOP" -eq 0 ]]; do
+      echo "[bot] Starting Telegram bot ..."
+      "$PY" -m telegram_bot &
+      BOT_PID=$!
+      wait "$BOT_PID" || true
+      [[ "$_BOT_STOP" -eq 1 ]] && break
+      echo "[bot] Crashed or exited — restarting in 5s ..."
+      sleep 5
+    done
+  }
+  _bot_watchdog &
+  BOT_WATCHDOG_PID=$!
+else
+  echo "TELEGRAM_BOT_TOKEN not set in .env — skipping Telegram bot."
+  BOT_WATCHDOG_PID=""
+fi
+
+cleanup() {
+  echo ""
+  echo "Shutting down services..."
+  _BOT_STOP=1
+  kill "${BACKEND_PID:-}" "${FRONTEND_PID:-}" "${BOT_PID:-}" "${BOT_WATCHDOG_PID:-}" 2>/dev/null || true
+  exit
+}
+trap cleanup SIGINT SIGTERM
+
 echo "========================================"
 echo "   GUI is running!"
 echo "   Open:     http://localhost:5173"
 echo "   API docs: http://127.0.0.1:8000/docs"
-echo "   Press Ctrl+C to stop both services."
+echo "   Press Ctrl+C to stop all services."
 echo "========================================"
 
-wait "$BACKEND_PID" "$FRONTEND_PID"
+wait "$BACKEND_PID" "$FRONTEND_PID" ${BOT_WATCHDOG_PID:+"$BOT_WATCHDOG_PID"}
