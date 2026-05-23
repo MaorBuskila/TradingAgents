@@ -41,10 +41,18 @@ echo ""
 
 echo "Starting FastAPI backend on http://127.0.0.1:8000 ..."
 # Kill any stale process holding port 8000 before starting
-if lsof -ti tcp:8000 >/dev/null 2>&1; then
-  echo "Port 8000 in use — killing stale process..."
-  lsof -ti tcp:8000 | xargs kill -9 2>/dev/null || true
-  sleep 0.5
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k 8000/tcp 2>/dev/null && echo "Port 8000 in use — killed stale process." && sleep 0.5 || true
+elif command -v lsof >/dev/null 2>&1; then
+  lsof -ti tcp:8000 | xargs kill -9 2>/dev/null && echo "Port 8000 in use — killed stale process." && sleep 0.5 || true
+else
+  # ss is always available on Linux; parse pid from socket state
+  _stale=$(ss -tlnp 'sport = :8000' 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)
+  if [[ -n "$_stale" ]]; then
+    echo "Port 8000 in use — killing stale process (pid $_stale)..."
+    kill -9 "$_stale" 2>/dev/null || true
+    sleep 0.5
+  fi
 fi
 "$PY" -m uvicorn api.main:app --host 127.0.0.1 --port 8000 &
 BACKEND_PID=$!
@@ -66,6 +74,10 @@ fi
 echo "Starting Vite frontend (proxies /api -> backend) ..."
 (cd "$ROOT/frontend" && npm run dev 2>&1) &
 FRONTEND_PID=$!
+
+# Kill any stale Telegram bot processes before starting
+pkill -f "python.*telegram_bot" 2>/dev/null || true
+sleep 0.5
 
 # Start Telegram bot with auto-restart if token is configured
 BOT_PID=""
